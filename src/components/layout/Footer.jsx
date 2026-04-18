@@ -26,10 +26,9 @@ const Footer = () => {
             Pioneering the future through advanced AI, robust cybersecurity solutions, and next-gen technological innovations across multiple domains.
           </p>
           <div className="flex space-x-4">
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaLinkedin size={20} /></a>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaGithub size={20} /></a>
-            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-secondary transition-colors"><FaInstagram size={20} /></a>
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaTwitter size={20} /></a>
+            <a href="https://www.linkedin.com/company/mira-future-tech-vision-pvt-ltd/" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaLinkedin size={20} /></a>
+            <a href="https://github.com/blackdevil0009" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaGithub size={20} /></a>
+            <a href="https://www.instagram.com/mirafuturetechvision?igsh=MTNqbG14cWpva2pqMQ==" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-secondary transition-colors"><FaInstagram size={20} /></a>
           </div>
         </div>
 
