@@ -270,5 +270,50 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// Submit Quiz Result (Public - no auth needed)
+app.post('/api/quiz/submit', async (req, res) => {
+  try {
+    const { name, email, roll_number, college_name, course, branch, passing_year, domain, correct, wrong, unanswered, total, percentage } = req.body;
+    if (!name || !email || !domain) return res.status(400).json({ error: 'Required fields missing' });
+    await pool.query(
+      `INSERT INTO quiz_results (name, email, roll_number, college_name, course, branch, passing_year, domain, correct, wrong, unanswered, total, percentage)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, roll_number, college_name, course, branch, passing_year, domain, correct, wrong, unanswered, total, percentage]
+    );
+    res.status(201).json({ message: 'Quiz result saved successfully' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Get All Quiz Results (Admin only)
+app.get('/api/admin/quiz-results', authenticateToken, async (req, res) => {
+  try {
+    const [results] = await pool.query('SELECT * FROM quiz_results ORDER BY created_at DESC');
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Get Quiz Analytics Summary (Admin only)
+app.get('/api/admin/quiz-analytics', authenticateToken, async (req, res) => {
+  try {
+    const [total] = await pool.query('SELECT COUNT(*) as count FROM quiz_results');
+    const [passed] = await pool.query('SELECT COUNT(*) as count FROM quiz_results WHERE percentage >= 60');
+    const [avgScore] = await pool.query('SELECT AVG(percentage) as avg FROM quiz_results');
+    const [byDomain] = await pool.query('SELECT domain, COUNT(*) as count, AVG(percentage) as avg_score FROM quiz_results GROUP BY domain ORDER BY count DESC');
+    res.json({
+      totalAttempts: total[0].count,
+      passedCount: passed[0].count,
+      failedCount: total[0].count - passed[0].count,
+      avgScore: Math.round(avgScore[0].avg || 0),
+      byDomain
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

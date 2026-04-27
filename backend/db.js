@@ -90,6 +90,25 @@ const initDb = async () => {
         UNIQUE KEY emp_date (employee_id, date)
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS quiz_results (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        roll_number VARCHAR(100),
+        college_name VARCHAR(255),
+        course VARCHAR(100),
+        branch VARCHAR(100),
+        passing_year VARCHAR(10),
+        domain VARCHAR(100) NOT NULL,
+        correct INT DEFAULT 0,
+        wrong INT DEFAULT 0,
+        unanswered INT DEFAULT 0,
+        total INT DEFAULT 0,
+        percentage DECIMAL(5,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     console.log("Database initialized successfully");
   } catch (error) {
     console.error("Database initialization failed. Ensure MySQL is running on localhost and credentials are correct:", error.message);
