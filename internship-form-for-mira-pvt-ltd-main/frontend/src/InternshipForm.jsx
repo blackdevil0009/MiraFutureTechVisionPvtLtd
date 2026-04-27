@@ -134,7 +134,7 @@ const InternshipForm = () => {
 
     try {
       const response = await axios.post(
-        'http://localhost:5000/api/internships/apply',
+        'https://api.mirafuturetechvision.com/api/internships/apply',
         formData,
         {
           headers: {

@@ -15,7 +15,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5000/api/employees/login', { email, password });
+      const res = await axios.post('https://api.mirafuturetechvision.com/api/employees/login', { email, password });
       login(res.data.token, res.data.user);
       navigate('/dashboard');
     } catch (err) {

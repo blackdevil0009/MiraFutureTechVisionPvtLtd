@@ -19,7 +19,7 @@ const Register = () => {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post('http://localhost:5000/api/employees/register', formData);
+      const res = await axios.post('https://api.mirafuturetechvision.com/api/employees/register', formData);
       setSuccess(res.data.message);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {

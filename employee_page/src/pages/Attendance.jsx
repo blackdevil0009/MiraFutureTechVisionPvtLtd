@@ -16,7 +16,7 @@ const Attendance = () => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('emp_token');
-      const res = await axios.get('http://localhost:5000/api/employees/attendance', {
+      const res = await axios.get('https://api.mirafuturetechvision.com/api/employees/attendance', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRecords(res.data);
@@ -36,7 +36,7 @@ const Attendance = () => {
     setMessage({ text: '', type: '' });
     try {
       const token = localStorage.getItem('emp_token');
-      await axios.post('http://localhost:5000/api/employees/attendance', {}, {
+      await axios.post('https://api.mirafuturetechvision.com/api/employees/attendance', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage({ text: 'Attendance marked successfully!', type: 'success' });
