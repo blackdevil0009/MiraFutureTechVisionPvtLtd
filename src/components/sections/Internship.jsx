@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link as RouterLink } from 'react-router-dom';
-import { Award, Briefcase, GraduationCap, Code } from 'lucide-react';
+import { Award, Briefcase, GraduationCap, Code, ClipboardList } from 'lucide-react';
 import Button from '../ui/Button';
 
 const benefits = [
@@ -42,11 +42,19 @@ const Internship = () => {
               ))}
             </ul>
 
-            <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
-              <Button variant="primary">
-                Apply for Internship
-              </Button>
-            </a>
+            <div className="flex flex-wrap gap-4">
+              <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
+                <Button variant="primary">
+                  Apply for Internship
+                </Button>
+              </a>
+              <a href="https://quiz.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
+                <button className="px-6 py-2.5 rounded-full border border-primary/30 bg-primary/5 text-primary font-semibold hover:bg-primary/10 transition-all flex items-center gap-2 group">
+                  <ClipboardList size={18} className="group-hover:scale-110 transition-transform" />
+                  Task Portal
+                </button>
+              </a>
+            </div>
           </motion.div>
 
           <motion.div 
@@ -56,6 +64,28 @@ const Internship = () => {
             className="lg:w-1/2 w-full relative"
           >
             <div className="absolute inset-0 bg-primary/5 blur-[80px] -z-10 rounded-full" />
+            
+            {/* Floating Task Badge */}
+            <motion.a 
+              href="https://quiz.mirafuturetechvision.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              animate={{ y: [0, -10, 0] }}
+              transition={{ repeat: Infinity, duration: 3 }}
+              className="absolute -top-6 -right-6 z-20 bg-background border border-borderBase p-4 rounded-2xl shadow-2xl flex items-center gap-3 group hover:border-primary/50 transition-colors"
+            >
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-md rounded-full animate-pulse" />
+                <div className="relative bg-primary/10 p-2 rounded-lg text-primary">
+                  <Code size={20} />
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider font-bold text-primary">Active Task</p>
+                <p className="text-sm font-bold text-textMain group-hover:text-primary transition-colors">Start Skill Quiz</p>
+              </div>
+            </motion.a>
+
             <div className="glass-panel p-6 rounded-2xl border border-borderBase">
               <div className="flex items-center justify-between border-b border-borderBase pb-4 mb-6">
                 <div className="flex gap-2">
