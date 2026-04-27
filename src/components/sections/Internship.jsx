@@ -15,7 +15,7 @@ const Internship = () => {
     <section id="internship" className="py-24 relative bg-surfaceHover/30 border-y border-borderBase">
       <div className="container mx-auto px-6 md:px-12">
         <div className="flex flex-col lg:flex-row items-center gap-16">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -28,7 +28,7 @@ const Internship = () => {
             <p className="text-textMuted text-lg mb-8 leading-relaxed">
               Step into the core of innovation. Our internship programs are designed as live simulations in real-world tech environments. Work alongside industry veterans, contribute to live projects, and secure your place in the tech vanguard.
             </p>
-            
+
             <ul className="space-y-4 mb-10">
               {benefits.map((benefit, idx) => (
                 <li key={idx} className="flex items-center gap-4 bg-surface p-4 rounded-lg border border-borderBase">
@@ -48,7 +48,7 @@ const Internship = () => {
                   Apply for Internship
                 </Button>
               </a>
-              <a href="https://quiz.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
+              <a href="https://quizes.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
                 <button className="px-6 py-2.5 rounded-full border border-primary/30 bg-primary/5 text-primary font-semibold hover:bg-primary/10 transition-all flex items-center gap-2 group">
                   <ClipboardList size={18} className="group-hover:scale-110 transition-transform" />
                   Task Portal
@@ -57,17 +57,17 @@ const Internship = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             className="lg:w-1/2 w-full relative"
           >
             <div className="absolute inset-0 bg-primary/5 blur-[80px] -z-10 rounded-full" />
-            
+
             {/* Floating Task Badge */}
-            <motion.a 
-              href="https://quiz.mirafuturetechvision.com"
+            <motion.a
+              href="https://quizes.mirafuturetechvision.com"
               target="_blank"
               rel="noopener noreferrer"
               animate={{ y: [0, -10, 0] }}
@@ -97,7 +97,7 @@ const Internship = () => {
                   <Code size={14} /> terminal.exe
                 </div>
               </div>
-              
+
               <div className="font-mono text-sm space-y-3 text-textMuted">
                 <p><span className="text-primary font-semibold">~/mira-tech $</span> ./scan_opportunities.sh</p>
                 <p className="opacity-70">Scanning open positions...</p>
