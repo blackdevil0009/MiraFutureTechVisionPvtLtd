@@ -1,10 +1,17 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const pool = mysql.createPool({
+const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  password: process.env.DB_PASSWORD || ''
+};
+
+const dbName = process.env.DB_NAME || 'mira_admin_db';
+
+const pool = mysql.createPool({
+  ...dbConfig,
+  database: dbName,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -12,10 +19,12 @@ const pool = mysql.createPool({
 
 const initDb = async () => {
   try {
-    const dbName = process.env.DB_NAME || 'mira_admin_db';
-    await pool.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
-    await pool.query(`USE \`${dbName}\``);
+    // Connect without database to ensure it exists
+    const tempConnection = await mysql.createConnection(dbConfig);
+    await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    await tempConnection.end();
     
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
