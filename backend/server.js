@@ -6,33 +6,8 @@ const jwt = require('jsonwebtoken');
 const pool = require('./db');
 
 const app = express();
-// Manual CORS handling to be more robust with Nginx/Preflight
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = [
-    "https://admin.mirafuturetechvision.com",
-    "https://quizes-liart.vercel.app",
-    "https://mirafuturetechvision.com",
-    "http://localhost:3000",
-    "http://localhost:5173"
-  ];
-  
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
 app.use(express.json());
+
 
 
 const authenticateToken = (req, res, next) => {
