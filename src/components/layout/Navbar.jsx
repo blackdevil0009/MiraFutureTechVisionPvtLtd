@@ -97,13 +97,13 @@ const Navbar = ({ showApply = true }) => {
           )}
           
           {showApply && (
-            <RouterLink to="/apply">
+            <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
               <button
                 className="px-4 py-2 rounded-lg text-xs font-display font-bold tracking-widest uppercase bg-primary text-background hover:brightness-110 transition-all shadow-glow-sm"
               >
                 Apply Now
               </button>
-            </RouterLink>
+            </a>
           )}
           {!showApply && (
             <button
@@ -168,13 +168,13 @@ const Navbar = ({ showApply = true }) => {
             ))
           )}
           {showApply && (
-            <RouterLink to="/apply" onClick={() => setIsOpen(false)}>
+            <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)}>
               <button
                 className="px-6 py-2 rounded-lg text-sm font-display font-bold tracking-widest uppercase bg-primary text-background hover:brightness-110 transition-all"
               >
                 Apply Now
               </button>
-            </RouterLink>
+            </a>
           )}
         </div>
       )}

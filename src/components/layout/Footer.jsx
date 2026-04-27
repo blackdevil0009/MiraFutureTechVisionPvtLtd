@@ -1,6 +1,6 @@
 import React from 'react';
 import { Mail, Phone, MapPin } from 'lucide-react';
-import { FaGithub, FaLinkedin, FaInstagram, FaTwitter } from 'react-icons/fa';
+import { FaGithub, FaLinkedin, FaInstagram } from 'react-icons/fa';
 import { Link } from 'react-scroll';
 
 const Footer = () => {
@@ -12,9 +12,9 @@ const Footer = () => {
           <div className="flex items-center gap-3 mb-6">
             <div className="relative">
               <div className="absolute -inset-1 bg-primary/20 rounded-full blur opacity-50"></div>
-              <img 
-                src="/logo192.jpeg" 
-                alt="Mira Tech Logo" 
+              <img
+                src="/logo192.jpeg"
+                alt="Mira Tech Logo"
                 className="relative w-10 h-10 rounded-full object-cover border border-borderBase"
               />
             </div>
@@ -26,7 +26,7 @@ const Footer = () => {
             Pioneering the future through advanced AI, robust cybersecurity solutions, and next-gen technological innovations across multiple domains.
           </p>
           <div className="flex space-x-4">
-            <a href="https://www.linkedin.com/company/mira-future-tech-vision-pvt-ltd/" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaLinkedin size={20} /></a>
+            <a href="https://www.linkedin.com/company/115014294/" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaLinkedin size={20} /></a>
             <a href="https://github.com/blackdevil0009" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-primary transition-colors"><FaGithub size={20} /></a>
             <a href="https://www.instagram.com/mirafuturetechvision?igsh=MTNqbG14cWpva2pqMQ==" target="_blank" rel="noopener noreferrer" className="text-textMuted hover:text-secondary transition-colors"><FaInstagram size={20} /></a>
           </div>
@@ -69,15 +69,15 @@ const Footer = () => {
           <ul className="space-y-4">
             <li className="flex items-start gap-3">
               <MapPin className="text-primary shrink-0" size={18} />
-              <span className="text-textMuted text-sm">Tech Park, Cyber City, Future Zone 404</span>
+              <span className="text-textMuted text-sm">Babhnauli Sant Kabir Nagar Uttar Pradesh 272125 </span>
             </li>
             <li className="flex items-center gap-3">
               <Phone className="text-primary shrink-0" size={18} />
-              <span className="text-textMuted text-sm">+1 (800) MIRA-TECH</span>
+              <span className="text-textMuted text-sm">+91 7052608972</span>
             </li>
             <li className="flex items-center gap-3">
               <Mail className="text-primary shrink-0" size={18} />
-              <span className="text-textMuted text-sm">hello@mirafuture.tech</span>
+              <span className="text-textMuted text-sm">mirafuturetechvision@gmail.com</span>
             </li>
           </ul>
         </div>

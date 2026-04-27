@@ -50,11 +50,11 @@ const Hero = () => {
                 Explore Domains
               </Button>
             </ScrollLink>
-            <RouterLink to="/apply">
+            <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
               <Button variant="outline" className="w-full sm:w-auto px-8">
                 Join Internship
               </Button>
-            </RouterLink>
+            </a>
           </div>
         </motion.div>
       </div>

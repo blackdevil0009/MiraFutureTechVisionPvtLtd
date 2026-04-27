@@ -42,11 +42,11 @@ const Internship = () => {
               ))}
             </ul>
 
-            <RouterLink to="/apply">
+            <a href="https://internship.mirafuturetechvision.com" target="_blank" rel="noopener noreferrer">
               <Button variant="primary">
                 Apply for Internship
               </Button>
-            </RouterLink>
+            </a>
           </motion.div>
 
           <motion.div 
