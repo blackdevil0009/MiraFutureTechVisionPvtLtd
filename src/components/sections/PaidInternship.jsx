@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, CheckCircle2, ShieldCheck, Zap, ArrowRight, CreditCard } from 'lucide-react';
+import { Sparkles, CheckCircle2, ShieldCheck, Zap, ArrowRight, CreditCard, Code2, Shield, Database, Layout, Smartphone, FileCode, Layers, BrainCircuit } from 'lucide-react';
 import Button from '../ui/Button';
 
 const premiumFeatures = [
@@ -11,6 +11,17 @@ const premiumFeatures = [
   "Lifetime Access to Alumni Network"
 ];
 
+const eliteTracks = [
+  { name: "Python", icon: <Code2 className="w-5 h-5" /> },
+  { name: "Java", icon: <Layers className="w-5 h-5" /> },
+  { name: "DSA", icon: <BrainCircuit className="w-5 h-5" /> },
+  { name: "Cyber Security", icon: <Shield className="w-5 h-5" /> },
+  { name: "Data Analytics", icon: <Database className="w-5 h-5" /> },
+  { name: ".NET Core", icon: <FileCode className="w-5 h-5" /> },
+  { name: "Kotlin", icon: <Smartphone className="w-5 h-5" /> },
+  { name: "Web Tech", icon: <Layout className="w-5 h-5" /> }
+];
+
 const PaidInternship = () => {
   return (
     <section id="paid-internship" className="py-24 relative overflow-hidden bg-background">
@@ -19,7 +30,7 @@ const PaidInternship = () => {
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-secondary/5 blur-[100px] -z-10 rounded-full" />
 
       <div className="container mx-auto px-6 md:px-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -28,7 +39,7 @@ const PaidInternship = () => {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-bold mb-6"
             >
               <Sparkles size={16} />
-              PREMIUM EXPERIENCE
+              ELITE SPECIALIZATION
             </motion.div>
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
@@ -37,21 +48,30 @@ const PaidInternship = () => {
               transition={{ delay: 0.1 }}
               className="text-4xl md:text-5xl font-display font-bold text-textMain mb-6"
             >
-              FAST-TRACK YOUR CAREER WITH <br />
-              <span className="text-gradient">PAID ELITE INTERNSHIPS</span>
+              CHOOSE YOUR <span className="text-gradient">DOMAIN</span>
             </motion.h2>
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="text-textMuted text-lg max-w-2xl mx-auto"
-            >
-              Invest in your future with our specialized high-impact programs. Gain priority access to top-tier projects and dedicated career support.
-            </motion.p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
+            {eliteTracks.map((track, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.05 }}
+                viewport={{ once: true }}
+                className="bg-surface p-5 rounded-2xl border border-borderBase flex flex-col items-center gap-3 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group"
+              >
+                <div className="bg-background p-3 rounded-xl text-primary group-hover:scale-110 transition-transform">
+                  {track.icon}
+                </div>
+                <span className="font-bold text-textMain text-sm md:text-base">{track.name}</span>
+              </motion.div>
+            ))}
           </div>
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
+
             {/* Features List */}
             <motion.div 
               initial={{ opacity: 0, x: -30 }}
