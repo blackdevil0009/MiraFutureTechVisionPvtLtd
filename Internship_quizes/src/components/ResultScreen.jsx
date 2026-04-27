@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-const API = 'https://api.mirafuturetechvision.com';
+import { API_URL as API } from '../config';
 
 const ResultScreen = ({ domain, results, onRestart, onBackToDomains, userInfo }) => {
   const { correct, wrong, unanswered, answers, questions } = results;
