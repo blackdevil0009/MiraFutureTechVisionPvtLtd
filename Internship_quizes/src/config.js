@@ -1,7 +1,2 @@
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-export const API_URL = isLocal 
-  ? 'http://localhost:5000' 
-  : 'https://api.mirafuturetechvision.com';
-
+export const API_URL = 'https://api.mirafuturetechvision.com';
 export default API_URL;
