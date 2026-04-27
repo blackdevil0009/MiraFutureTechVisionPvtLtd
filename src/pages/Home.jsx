@@ -6,6 +6,7 @@ import About from '../components/sections/About';
 import Domains from '../components/sections/Domains';
 import Projects from '../components/sections/Projects';
 import Internship from '../components/sections/Internship';
+import PaidInternship from '../components/sections/PaidInternship';
 import Careers from '../components/sections/Careers';
 import Contact from '../components/sections/Contact';
 
@@ -30,10 +31,12 @@ const Home = () => {
       <Domains />
       <Projects />
       <Internship />
+      <PaidInternship />
       <Careers />
       <Contact />
     </>
   );
 };
+
 
 export default Home;
