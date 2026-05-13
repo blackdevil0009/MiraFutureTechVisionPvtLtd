@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import API_URL from '../config';
 import { CalendarCheck, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -14,7 +15,7 @@ const Attendance = () => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('emp_token');
-      const res = await axios.get('http://localhost:5000/api/employees/attendance', {
+      const res = await axios.get(`${API_URL}/api/employees/attendance`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRecords(res.data);
@@ -34,7 +35,7 @@ const Attendance = () => {
     setMessage({ text: '', type: '' });
     try {
       const token = localStorage.getItem('emp_token');
-      await axios.post('http://localhost:5000/api/employees/attendance', {}, {
+      await axios.post(`${API_URL}/api/employees/attendance`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage({ text: 'Attendance marked successfully!', type: 'success' });

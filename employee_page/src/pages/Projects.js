@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, Calendar, CheckCircle, Users } from 'lucide-react';
+import API_URL from '../config';
 
 const Projects = () => {
   const [projects, setProjects] = useState([]);
@@ -10,7 +11,7 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/projects', {
+      const res = await fetch(`${API_URL}/api/projects`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('emp_token')}` }
       });
       if (res.ok) setProjects(await res.json());

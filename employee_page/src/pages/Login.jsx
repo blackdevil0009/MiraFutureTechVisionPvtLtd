@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import API_URL from '../config';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -15,7 +16,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:5000/api/employees/login', { email, password });
+      const res = await axios.post(`${API_URL}/api/employees/login`, { email, password });
       login(res.data.token, res.data.user);
       navigate('/dashboard');
     } catch (err) {

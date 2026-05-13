@@ -6,6 +6,7 @@ import {
   Clock, AlertTriangle, TrendingUp, BarChart2, Layout
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import API_URL from '../config';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -25,9 +26,9 @@ const Dashboard = () => {
   const fetchAll = async () => {
     try {
       const [taskRes, projRes, attRes] = await Promise.all([
-        fetch('http://localhost:5000/api/tasks', { headers: HEADERS }),
-        fetch('http://localhost:5000/api/projects', { headers: HEADERS }),
-        fetch('http://localhost:5000/api/employees/attendance', { headers: HEADERS }),
+        fetch(`${API_URL}/api/tasks`, { headers: HEADERS }),
+        fetch(`${API_URL}/api/projects`, { headers: HEADERS }),
+        fetch(`${API_URL}/api/employees/attendance`, { headers: HEADERS }),
       ]);
 
       if (taskRes.ok) {

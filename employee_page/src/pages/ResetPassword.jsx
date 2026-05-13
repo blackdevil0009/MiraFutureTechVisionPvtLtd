@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import API_URL from '../config';
 import { Lock, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -39,7 +40,7 @@ const ResetPassword = () => {
     setMessage('');
     
     try {
-      const res = await axios.post('http://localhost:5000/api/employees/reset-password', { token, newPassword: password });
+      const res = await axios.post(`${API_URL}/api/employees/reset-password`, { token, newPassword: password });
       setStatus('success');
       setMessage(res.data.message || 'Password has been reset successfully.');
     } catch (err) {

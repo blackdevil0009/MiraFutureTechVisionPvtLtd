@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { io } from 'socket.io-client';
 import { Paperclip, X, Upload, Clock, CheckCircle, MessageSquare, Download } from 'lucide-react';
+import API_URL from '../config';
 
 const Kanban = () => {
   const [tasks, setTasks] = useState({ 'Pending': [], 'In Progress': [], 'Review': [], 'Completed': [] });
@@ -17,7 +18,7 @@ const Kanban = () => {
   const HEADERS = { Authorization: `Bearer ${TOKEN}` };
 
   useEffect(() => {
-    const sock = io('http://localhost:5000');
+    const sock = io(API_URL);
     setSocket(sock);
     fetchTasks(sock);
     sock.on('task_updated', (updated) => {
@@ -35,7 +36,7 @@ const Kanban = () => {
 
   const fetchTasks = async (sock) => {
     try {
-      const res = await fetch('http://localhost:5000/api/tasks', { headers: HEADERS });
+      const res = await fetch(`${API_URL}/api/tasks`, { headers: HEADERS });
       if (res.ok) {
         const data = await res.json();
         const grouped = { 'Pending': [], 'In Progress': [], 'Review': [], 'Completed': [] };
@@ -56,7 +57,7 @@ const Kanban = () => {
     dst.splice(destination.index, 0, moved);
     setTasks({ ...tasks, [source.droppableId]: src, [destination.droppableId]: dst });
     try {
-      await fetch(`http://localhost:5000/api/tasks/${draggableId}`, {
+      await fetch(`${API_URL}/api/tasks/${draggableId}`, {
         method: 'PUT',
         headers: { ...HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: destination.droppableId })
@@ -81,7 +82,7 @@ const Kanban = () => {
       fd.append('file', uploadFile);
       if (submitComment.trim()) fd.append('comment', submitComment.trim());
       if (submitTime) fd.append('time_spent', submitTime);
-      const res = await fetch(`http://localhost:5000/api/tasks/${selectedTask.id}/submissions`, {
+      const res = await fetch(`${API_URL}/api/tasks/${selectedTask.id}/submissions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${TOKEN}` },
         body: fd
@@ -200,7 +201,7 @@ const Kanban = () => {
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Paperclip className="w-3.5 h-3.5 text-blue-400" /> Reference File from Admin
                   </p>
-                  <a href={`http://localhost:5000${selectedTask.attachment_url}`} target="_blank" rel="noreferrer"
+                  <a href={`${API_URL}${selectedTask.attachment_url}`} target="_blank" rel="noreferrer"
                     className="flex items-center gap-3 p-3 bg-slate-900/50 border border-slate-700 hover:border-blue-500/50 rounded-xl text-slate-300 hover:text-blue-400 transition-colors group">
                     <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
                       <Paperclip className="w-4 h-4 text-blue-400" />

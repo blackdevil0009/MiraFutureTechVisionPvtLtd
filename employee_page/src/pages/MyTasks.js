@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Clock, AlertCircle, ListTodo } from 'lucide-react';
+import API_URL from '../config';
 
 const MyTasks = () => {
   const [tasks, setTasks] = useState([]);
@@ -8,7 +9,7 @@ const MyTasks = () => {
   useEffect(() => {
     const fetchMyTasks = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/tasks', {
+        const res = await fetch(`${API_URL}/api/tasks`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('emp_token')}` }
         });
         if (res.ok) {

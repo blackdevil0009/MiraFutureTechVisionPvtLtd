@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import API_URL from '../config';
 import { Mail, Lock, User, Phone, Briefcase, Link as LinkIcon, MapPin, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -19,7 +20,7 @@ const Register = () => {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post('http://localhost:5000/api/employees/register', formData);
+      const res = await axios.post(`${API_URL}/api/employees/register`, formData);
       setSuccess(res.data.message);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
