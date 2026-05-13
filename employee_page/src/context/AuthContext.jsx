@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem('emp_token');
       if (token) {
         try {
-          const res = await axios.get('https://api.mirafuturetechvision.com/api/employees/me', {
+          const res = await axios.get('http://localhost:5000/api/employees/me', {
             headers: { Authorization: `Bearer ${token}` }
           });
           setUser(res.data);

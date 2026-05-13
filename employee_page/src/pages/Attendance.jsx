@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { LogOut, CalendarCheck, CheckCircle, Clock, AlertCircle, Home } from 'lucide-react';
+import { CalendarCheck, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Attendance = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
@@ -16,7 +14,7 @@ const Attendance = () => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('emp_token');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/employees/attendance', {
+      const res = await axios.get('http://localhost:5000/api/employees/attendance', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRecords(res.data);
@@ -36,7 +34,7 @@ const Attendance = () => {
     setMessage({ text: '', type: '' });
     try {
       const token = localStorage.getItem('emp_token');
-      await axios.post('https://api.mirafuturetechvision.com/api/employees/attendance', {}, {
+      await axios.post('http://localhost:5000/api/employees/attendance', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage({ text: 'Attendance marked successfully!', type: 'success' });
@@ -48,32 +46,13 @@ const Attendance = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+
 
   const hasMarkedToday = records.length > 0 && new Date(records[0].date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-        <div className="flex items-center gap-3 text-blue-400">
-          <CalendarCheck className="w-6 h-6" />
-          <span className="font-bold text-xl text-white">Attendance</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link to="/dashboard" className="text-slate-400 hover:text-white flex items-center gap-2">
-            <Home className="w-4 h-4" /> Dashboard
-          </Link>
-          <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20 font-medium">
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto p-6 md:p-10">
+    <div className="text-white">
+      <div className="max-w-4xl mx-auto p-6 md:p-10">
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-8 flex flex-col justify-center items-center text-center">
             <h2 className="text-2xl font-bold mb-2">Mark Today's Attendance</h2>
@@ -148,7 +127,7 @@ const Attendance = () => {
             </div>
           )}
         </motion.div>
-      </main>
+      </div>
     </div>
   );
 };

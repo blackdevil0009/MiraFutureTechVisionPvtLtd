@@ -39,31 +39,20 @@ function App() {
 
   const handleAnswerSelect = (answerIndex) => {
     setSelectedAnswer(answerIndex);
-    setQuizAnswers([...quizAnswers, answerIndex]);
+    setQuizAnswers(prev => [...prev, answerIndex]);
     setIsAnswered(true);
     setShowResult(true);
   };
 
   const handleTimeUp = useCallback(() => {
     if (!isAnswered) {
-      setQuizAnswers([...quizAnswers, undefined]);
+      setQuizAnswers(prev => [...prev, undefined]);
       setIsAnswered(true);
       setShowResult(true);
     }
-  }, [isAnswered, quizAnswers]);
+  }, [isAnswered]);
 
-  const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < domainQuestions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedAnswer(null);
-      setIsAnswered(false);
-      setShowResult(false);
-    } else {
-      calculateResults();
-    }
-  }, [currentQuestionIndex, domainQuestions.length]);
-
-  const calculateResults = () => {
+  const calculateResults = useCallback(() => {
     const results = {
       correct: 0,
       wrong: 0,
@@ -72,7 +61,8 @@ function App() {
       questions: domainQuestions
     };
 
-    quizAnswers.forEach((answer, index) => {
+    domainQuestions.forEach((_, index) => {
+      const answer = quizAnswers[index];
       if (answer === undefined) {
         results.unanswered++;
       } else if (answer === domainQuestions[index].correctAnswer) {
@@ -84,7 +74,18 @@ function App() {
 
     setAnswers(results);
     setCurrentScreen('result');
-  };
+  }, [quizAnswers, domainQuestions]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (currentQuestionIndex < domainQuestions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setSelectedAnswer(null);
+      setIsAnswered(false);
+      setShowResult(false);
+    } else {
+      calculateResults();
+    }
+  }, [currentQuestionIndex, domainQuestions.length, calculateResults]);
 
   const handleRestart = () => {
     setCurrentQuestionIndex(0);

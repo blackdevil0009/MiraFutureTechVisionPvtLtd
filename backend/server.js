@@ -4,10 +4,73 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('./db');
+const http = require('http');
+const { Server } = require('socket.io');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
+const crypto = require('crypto');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
 const app = express();
 app.use(express.json());
+// CORS configuration to allow credentials (important for websockets sometimes)
+app.use(cors({ origin: true, credentials: true }));
 
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"]
+  }
+});
+
+// Pass io to request object so routes can emit events
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname.replace(/\\s+/g, '-'));
+  }
+});
+const upload = multer({ storage: storage });
+
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+
+  socket.on('join_project', (projectId) => {
+    socket.join(`project_${projectId}`);
+  });
+
+  socket.on('join_task', (taskId) => {
+    socket.join(`task_${taskId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
 
 
 const authenticateToken = (req, res, next) => {
@@ -25,7 +88,7 @@ const authenticateToken = (req, res, next) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
+
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'All fields are required' });
     }
@@ -37,7 +100,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     await pool.query('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [name, email, hashedPassword]);
-    
+
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -46,25 +109,15 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { passkey } = req.body;
+    const adminPasskey = process.env.ADMIN_PASSKEY || 'MFTV2006';
 
-    const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+    if (passkey !== adminPasskey) {
+      return res.status(400).json({ error: 'Invalid Pass Key' });
     }
 
-    const user = users[0];
-    if (!user.password) {
-      return res.status(400).json({ error: 'Please login using Google' });
-    }
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    const token = jwt.sign({ id: 'admin', role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token, user: { id: 'admin', name: 'Administrator', role: 'admin' } });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -161,6 +214,61 @@ app.post('/api/employees/login', async (req, res) => {
   }
 });
 
+// Employee Forgot Password
+app.post('/api/employees/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const [users] = await pool.query('SELECT * FROM employees WHERE email = ?', [email]);
+    if (users.length === 0) return res.status(404).json({ error: 'User with this email not found' });
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+    await pool.query('UPDATE employees SET reset_token = ?, reset_token_expiry = ? WHERE email = ?', [resetToken, resetTokenExpiry, email]);
+
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+    
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: 'Password Reset Request',
+      html: `
+        <h2>Password Reset Request</h2>
+        <p>You requested a password reset for your employee account.</p>
+        <p>Click the link below to reset your password. This link is valid for 1 hour.</p>
+        <br/>
+        <a href="${resetLink}" style="display:inline-block;padding:10px 20px;background-color:#2563eb;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">Reset Password</a>
+        <br/><br/>
+        <p>If you did not request this, please ignore this email.</p>
+      `
+    });
+
+    res.json({ message: 'Password reset link sent to your email' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to process forgot password request' });
+  }
+});
+
+// Employee Reset Password
+app.post('/api/employees/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+
+    const [users] = await pool.query('SELECT * FROM employees WHERE reset_token = ? AND reset_token_expiry > NOW()', [token]);
+    if (users.length === 0) return res.status(400).json({ error: 'Invalid or expired reset token' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE employees SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [hashedPassword, users[0].id]);
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // Get current Employee
 app.get('/api/employees/me', authenticateToken, async (req, res) => {
   try {
@@ -253,10 +361,10 @@ app.get('/api/admin/dashboard', authenticateToken, async (req, res) => {
   try {
     const [empCount] = await pool.query('SELECT COUNT(*) as count FROM employees');
     const [internCount] = await pool.query('SELECT COUNT(*) as count FROM internships');
-    
+
     const date = new Date().toISOString().split('T')[0];
     const [attCount] = await pool.query('SELECT COUNT(*) as count FROM attendance WHERE date = ?', [date]);
-    
+
     const [unverifiedCount] = await pool.query('SELECT COUNT(*) as count FROM employees WHERE verified = false OR verified IS NULL');
 
     res.json({
@@ -315,5 +423,350 @@ app.get('/api/admin/quiz-analytics', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// ENTERPRISE PROJECT MANAGEMENT APIs
+// ==========================================
+
+// Projects API
+app.post('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, start_date, end_date } = req.body;
+    const [result] = await pool.query(
+      'INSERT INTO projects (name, description, start_date, end_date) VALUES (?, ?, ?, ?)',
+      [name, description, start_date, end_date]
+    );
+    res.status(201).json({ id: result.insertId, message: 'Project created' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const [projects] = await pool.query('SELECT * FROM projects ORDER BY created_at DESC');
+    res.json(projects);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/projects/:id', authenticateToken, async (req, res) => {
+  try {
+    const [projects] = await pool.query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    if (projects.length === 0) return res.status(404).json({ error: 'Project not found' });
+    res.json(projects[0]);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Tasks API
+app.post('/api/tasks', authenticateToken, upload.single('attachment'), async (req, res) => {
+  try {
+    const { project_id, title, description, assigned_to, priority, due_date } = req.body;
+    const attachment_url = req.file ? '/uploads/' + req.file.filename : null;
+    const attachment_name = req.file ? req.file.originalname : null;
+
+    const [result] = await pool.query(
+      'INSERT INTO tasks (project_id, title, description, assigned_to, priority, due_date, attachment_url, attachment_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [project_id, title, description, assigned_to, priority, due_date, attachment_url, attachment_name]
+    );
+    const newTask = { id: result.insertId, project_id, title, description, assigned_to, status: 'Pending', priority, due_date, attachment_url, attachment_name };
+    req.io.to(`project_${project_id}`).emit('task_created', newTask);
+
+    // Notify employee
+    if (assigned_to) {
+      await pool.query('INSERT INTO notifications (user_id, user_type, message) VALUES (?, ?, ?)', [assigned_to, 'employee', `You have been assigned a new task: ${title}`]);
+    }
+
+    res.status(201).json({ id: result.insertId, message: 'Task created' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/tasks', authenticateToken, async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let query = 'SELECT t.*, p.name as project_name, e.name as assignee_name FROM tasks t LEFT JOIN projects p ON t.project_id = p.id LEFT JOIN employees e ON t.assigned_to = e.id WHERE 1=1';
+    const params = [];
+
+    // If the requester is an employee, always filter to their own tasks
+    if (req.user.role === 'employee') {
+      query += ' AND t.assigned_to = ?';
+      params.push(req.user.id);
+    } else if (req.query.assigned_to) {
+      // Admin can optionally filter by assigned_to
+      query += ' AND t.assigned_to = ?';
+      params.push(req.query.assigned_to);
+    }
+
+    if (project_id) {
+      query += ' AND t.project_id = ?';
+      params.push(project_id);
+    }
+
+    query += ' ORDER BY t.created_at DESC';
+    const [tasks] = await pool.query(query, params);
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
+  try {
+    const { status, priority, due_date, assigned_to } = req.body;
+    const { id } = req.params;
+    await pool.query(
+      'UPDATE tasks SET status = COALESCE(?, status), priority = COALESCE(?, priority), due_date = COALESCE(?, due_date), assigned_to = COALESCE(?, assigned_to) WHERE id = ?',
+      [status, priority, due_date, assigned_to, id]
+    );
+    const [updatedTask] = await pool.query('SELECT * FROM tasks WHERE id = ?', [id]);
+    if (updatedTask.length > 0) {
+      req.io.to(`project_${updatedTask[0].project_id}`).emit('task_updated', updatedTask[0]);
+      req.io.to(`task_${id}`).emit('task_updated', updatedTask[0]);
+    }
+    res.json({ message: 'Task updated' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Task Comments
+app.post('/api/tasks/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { comment } = req.body;
+    const task_id = req.params.id;
+    const user_id = req.user.id;
+    // Simple way to distinguish admin vs employee: check if req.user has role='employee'
+    const user_type = req.user.role === 'employee' ? 'employee' : 'admin';
+
+    const [result] = await pool.query(
+      'INSERT INTO task_comments (task_id, user_id, user_type, comment) VALUES (?, ?, ?, ?)',
+      [task_id, user_id, user_type, comment]
+    );
+
+    // Fetch comment with user info
+    let userName = 'User';
+    if (user_type === 'employee') {
+      const [emp] = await pool.query('SELECT name FROM employees WHERE id = ?', [user_id]);
+      if (emp.length) userName = emp[0].name;
+    } else {
+      const [adm] = await pool.query('SELECT name FROM users WHERE id = ?', [user_id]);
+      if (adm.length) userName = adm[0].name;
+    }
+
+    const newComment = { id: result.insertId, task_id, user_id, user_type, comment, created_at: new Date(), userName };
+    req.io.to(`task_${task_id}`).emit('new_comment', newComment);
+    res.status(201).json(newComment);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/tasks/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const [comments] = await pool.query(`
+      SELECT c.*, 
+        CASE WHEN c.user_type = 'employee' THEN e.name ELSE u.name END as userName
+      FROM task_comments c
+      LEFT JOIN employees e ON c.user_id = e.id AND c.user_type = 'employee'
+      LEFT JOIN users u ON c.user_id = u.id AND c.user_type = 'admin'
+      WHERE c.task_id = ? ORDER BY c.created_at ASC
+    `, [req.params.id]);
+    res.json(comments);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// File Submissions
+app.post('/api/tasks/:id/submissions', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const task_id = req.params.id;
+    const employee_id = req.user.id;
+    const file_url = '/uploads/' + req.file.filename;
+    const file_name = req.file.originalname;
+    const comment = req.body.comment || null;
+    const time_spent = req.body.time_spent ? parseFloat(req.body.time_spent) : 0;
+
+    await pool.query(
+      'INSERT INTO submissions (task_id, employee_id, file_url, file_name, comment, time_spent) VALUES (?, ?, ?, ?, ?, ?)',
+      [task_id, employee_id, file_url, file_name, comment, time_spent]
+    );
+
+    await pool.query("UPDATE tasks SET status = 'Review' WHERE id = ?", [task_id]);
+    const [updatedTask] = await pool.query('SELECT * FROM tasks WHERE id = ?', [task_id]);
+    req.io.to(`project_${updatedTask[0].project_id}`).emit('task_updated', updatedTask[0]);
+
+    res.status(201).json({ message: 'File submitted successfully', file_url });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get('/api/tasks/:id/submissions', authenticateToken, async (req, res) => {
+  try {
+    const [submissions] = await pool.query('SELECT s.*, e.name as employee_name FROM submissions s JOIN employees e ON s.employee_id = e.id WHERE s.task_id = ? ORDER BY s.created_at DESC', [req.params.id]);
+    res.json(submissions);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.put('/api/submissions/:id', authenticateToken, async (req, res) => {
+  try {
+    const { status } = req.body; // e.g. Approved, Rejected
+    await pool.query('UPDATE submissions SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ message: 'Submission status updated' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Notifications
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const user_type = req.user.role === 'employee' ? 'employee' : 'admin';
+    const [notifications] = await pool.query('SELECT * FROM notifications WHERE user_id = ? AND user_type = ? ORDER BY created_at DESC', [user_id, user_type]);
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('UPDATE notifications SET is_read = TRUE WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Notification marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Advanced Analytics API
+app.get('/api/analytics/pm', authenticateToken, async (req, res) => {
+  try {
+    const [projectCount] = await pool.query('SELECT COUNT(*) as count FROM projects');
+    const [taskStats] = await pool.query("SELECT status, COUNT(*) as count FROM tasks GROUP BY status");
+    const [overdueTasks] = await pool.query("SELECT COUNT(*) as count FROM tasks WHERE due_date < CURDATE() AND status != 'Completed'");
+    const [productivity] = await pool.query(`
+      SELECT e.name, COUNT(t.id) as completed_tasks 
+      FROM employees e 
+      JOIN tasks t ON e.id = t.assigned_to 
+      WHERE t.status = 'Completed' 
+      GROUP BY e.id 
+      ORDER BY completed_tasks DESC LIMIT 5
+    `);
+
+    res.json({
+      totalProjects: projectCount[0]?.count || 0,
+      taskStats: taskStats,
+      overdueTasks: overdueTasks[0]?.count || 0,
+      topPerformers: productivity
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Cron job to check for overdue tasks and send email notifications
+// Runs every day at 9:00 AM ('0 9 * * *') - For testing, you can change to '* * * * *' (every minute)
+cron.schedule('0 9 * * *', async () => {
+  try {
+    console.log('Running cron job for overdue tasks...');
+    const [overdueTasks] = await pool.query(`
+      SELECT t.id, t.title, t.due_date, e.name as employee_name, e.email as employee_email, p.name as project_name
+      FROM tasks t
+      JOIN employees e ON t.assigned_to = e.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.due_date < CURDATE() AND t.status != 'Completed'
+    `);
+
+    if (overdueTasks.length > 0) {
+      console.log(`Found ${overdueTasks.length} overdue tasks. Sending emails...`);
+      for (const task of overdueTasks) {
+        if (task.employee_email && process.env.SMTP_USER && process.env.SMTP_PASS) {
+          const mailOptions = {
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: task.employee_email,
+            subject: `Action Required: Overdue Task - ${task.title}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2 style="color: #e11d48;">Overdue Task Alert</h2>
+                <p>Hi <strong>${task.employee_name}</strong>,</p>
+                <p>This is an automated reminder that the following task is currently <strong>overdue</strong>:</p>
+                <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #e11d48; margin: 20px 0;">
+                  <p style="margin: 0 0 10px 0;"><strong>Task:</strong> ${task.title}</p>
+                  <p style="margin: 0 0 10px 0;"><strong>Project:</strong> ${task.project_name || 'N/A'}</p>
+                  <p style="margin: 0;"><strong>Due Date:</strong> ${new Date(task.due_date).toLocaleDateString()}</p>
+                </div>
+                <p>Please review your Kanban board and submit your work as soon as possible.</p>
+                <br/>
+                <p>Regards,</p>
+                <p><strong>Admin Team</strong></p>
+              </div>
+            `
+          };
+          await transporter.sendMail(mailOptions);
+        }
+      }
+      console.log('Overdue task emails sent successfully.');
+    } else {
+      console.log('No overdue tasks found.');
+    }
+  } catch (error) {
+    console.error('Error running overdue tasks cron job:', error);
+  }
+});
+
+// Cron job to check for overdue projects and send email notifications to admin
+cron.schedule('0 9 * * *', async () => {
+  try {
+    console.log('Running cron job for overdue projects...');
+    const [overdueProjects] = await pool.query(`
+      SELECT p.id, p.name, p.end_date
+      FROM projects p
+      WHERE p.end_date < CURDATE() AND p.status != 'Completed'
+    `);
+
+    if (overdueProjects.length > 0 && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.ADMIN_EMAIL) {
+      console.log(`Found ${overdueProjects.length} overdue projects. Sending emails to admin...`);
+      for (const project of overdueProjects) {
+        const mailOptions = {
+          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          to: process.env.ADMIN_EMAIL,
+          subject: `Admin Alert: Overdue Project - ${project.name}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #e11d48;">Overdue Project Alert</h2>
+              <p>Hi <strong>Admin</strong>,</p>
+              <p>This is an automated reminder that the following project is currently <strong>overdue</strong>:</p>
+              <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #e11d48; margin: 20px 0;">
+                <p style="margin: 0 0 10px 0;"><strong>Project:</strong> ${project.name}</p>
+                <p style="margin: 0;"><strong>End Date:</strong> ${new Date(project.end_date).toLocaleDateString()}</p>
+              </div>
+              <p>Please review the project timeline and follow up with the assigned employees.</p>
+              <br/>
+              <p>Regards,</p>
+              <p><strong>System Mailer</strong></p>
+            </div>
+          `
+        };
+        await transporter.sendMail(mailOptions);
+      }
+      console.log('Overdue project emails sent successfully.');
+    } else {
+      console.log('No overdue projects found.');
+    }
+  } catch (error) {
+    console.error('Error running overdue projects cron job:', error);
+  }
+});
+
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

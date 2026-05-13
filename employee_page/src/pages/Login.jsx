@@ -15,7 +15,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('https://api.mirafuturetechvision.com/api/employees/login', { email, password });
+      const res = await axios.post('http://localhost:5000/api/employees/login', { email, password });
       login(res.data.token, res.data.user);
       navigate('/dashboard');
     } catch (err) {
@@ -50,6 +50,11 @@ const Login = () => {
             <Lock className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required
               className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+              Forgot Password?
+            </Link>
           </div>
           <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl font-semibold transition-colors">
             Sign In
