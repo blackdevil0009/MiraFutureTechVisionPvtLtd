@@ -2,25 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import API_URL from '../config';
-import { Lock, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Lock, ArrowRight, ShieldCheck, AlertCircle, KeyRound } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token');
+  const email = searchParams.get('email');
   const navigate = useNavigate();
 
+  const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (!token) {
+    if (!email) {
       setStatus('error');
-      setMessage('Invalid or missing password reset token.');
+      setMessage('Missing email. Please go back and request a new OTP.');
     }
-  }, [token]);
+  }, [email]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,12 +41,12 @@ const ResetPassword = () => {
     setMessage('');
     
     try {
-      const res = await axios.post(`${API_URL}/api/employees/reset-password`, { token, newPassword: password });
+      const res = await axios.post(`${API_URL}/api/employees/reset-password`, { email, otp, newPassword: password });
       setStatus('success');
       setMessage(res.data.message || 'Password has been reset successfully.');
     } catch (err) {
       setStatus('error');
-      setMessage(err.response?.data?.error || 'Failed to reset password. The link might be expired.');
+      setMessage(err.response?.data?.error || 'Failed to reset password. The OTP might be expired.');
     }
   };
 
@@ -61,7 +62,7 @@ const ResetPassword = () => {
             <ShieldCheck className="w-8 h-8 text-emerald-400" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
-          <p className="text-slate-400">Create a new secure password for your account.</p>
+          <p className="text-slate-400">Enter the OTP sent to your email and your new secure password.</p>
         </div>
 
         {status === 'success' ? (
@@ -86,6 +87,20 @@ const ResetPassword = () => {
             )}
             
             <div className="relative">
+              <KeyRound className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
+              <input 
+                type="text" 
+                value={otp} 
+                onChange={(e) => setOtp(e.target.value)} 
+                placeholder="6-digit OTP" 
+                required
+                maxLength="6"
+                disabled={!email}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50 text-center tracking-widest font-mono" 
+              />
+            </div>
+
+            <div className="relative">
               <Lock className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
               <input 
                 type="password" 
@@ -93,7 +108,7 @@ const ResetPassword = () => {
                 onChange={(e) => setPassword(e.target.value)} 
                 placeholder="New Password" 
                 required
-                disabled={!token}
+                disabled={!email}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50" 
               />
             </div>
@@ -106,14 +121,14 @@ const ResetPassword = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)} 
                 placeholder="Confirm New Password" 
                 required
-                disabled={!token}
+                disabled={!email}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-50" 
               />
             </div>
 
             <button 
               type="submit" 
-              disabled={status === 'loading' || !token}
+              disabled={status === 'loading' || !email}
               className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all disabled:opacity-70"
             >
               {status === 'loading' ? (

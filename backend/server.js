@@ -785,7 +785,7 @@ const razorpayInstance = new Razorpay({
 app.post('/api/payment/create-order', async (req, res) => {
   try {
     const { name, email, phone, domain } = req.body;
-    const amount = 2499 * 100; // Amount in paise
+    const amount = 99 * 100; // Amount in paise
 
     const options = {
       amount,

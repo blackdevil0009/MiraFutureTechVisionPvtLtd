@@ -110,7 +110,7 @@ const InternshipForm = () => {
     }
 
     if (!formData.resume_link.trim()) {
-      setMessage({ type: 'error', text: 'Resume link is required' });
+      setMessage({ type: 'error', text: 'Profile or Resume link is required' });
       return false;
     }
 
@@ -329,13 +329,13 @@ const InternshipForm = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Resume Link *</label>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Resume / GitHub / LinkedIn URL *</label>
                 <input
                   type="url"
                   name="resume_link"
                   value={formData.resume_link}
                   onChange={handleInputChange}
-                  placeholder="https://link-to-your-resume.com"
+                  placeholder="Link to Resume, GitHub, or LinkedIn"
                   className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                   required
                 />

@@ -17,9 +17,13 @@ const ForgotPassword = () => {
     setMessage('');
     
     try {
-      const res = await axios.post(`${API_URL}/api/employees/forgot-password`, { email });
+      const res = await axios.post(`${API_URL}/api/employees/forgot-password`, { email: email.trim() });
       setStatus('success');
-      setMessage(res.data.message || 'Password reset link sent to your email.');
+      setMessage(res.data.message || 'OTP sent to your email.');
+      // Automatically navigate to Reset Password page
+      setTimeout(() => {
+        navigate(`/reset-password?email=${encodeURIComponent(email)}`);
+      }, 1500);
     } catch (err) {
       setStatus('error');
       setMessage(err.response?.data?.error || 'Failed to process request.');
@@ -75,6 +79,8 @@ const ForgotPassword = () => {
                 onChange={(e) => setEmail(e.target.value)} 
                 placeholder="Email Address" 
                 required
+                pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+                title="Please enter a valid email address (e.g., yourname@gmail.com)"
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
               />
             </div>

@@ -20,7 +20,7 @@ const Register = () => {
     setError('');
     setSuccess('');
     try {
-      const res = await axios.post(`${API_URL}/api/employees/register`, formData);
+      const res = await axios.post(`${API_URL}/api/employees/register`, { ...formData, email: formData.email.trim() });
       setSuccess(res.data.message);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
@@ -53,6 +53,8 @@ const Register = () => {
             <div className="relative">
               <Mail className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
               <input type="email" name="email" onChange={handleChange} placeholder="Email Address" required
+                pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+                title="Please enter a valid email address (e.g., yourname@gmail.com)"
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="relative">
