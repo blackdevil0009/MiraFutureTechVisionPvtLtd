@@ -12,6 +12,7 @@ const dbName = process.env.DB_NAME || 'mira_admin_db';
 const pool = mysql.createPool({
   ...dbConfig,
   database: dbName,
+  timezone: '+05:30',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0

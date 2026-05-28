@@ -415,8 +415,9 @@ app.delete('/api/admin/employees/:id', authenticateToken, async (req, res) => {
 app.post('/api/employees/attendance', authenticateToken, async (req, res) => {
   try {
     const employee_id = req.user.id;
-    const date = new Date().toISOString().split('T')[0];
-    const time_in = new Date().toTimeString().split(' ')[0];
+    const istTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+    const date = istTime.getFullYear() + '-' + String(istTime.getMonth() + 1).padStart(2, '0') + '-' + String(istTime.getDate()).padStart(2, '0');
+    const time_in = String(istTime.getHours()).padStart(2, '0') + ':' + String(istTime.getMinutes()).padStart(2, '0') + ':' + String(istTime.getSeconds()).padStart(2, '0');
 
     const [existing] = await pool.query('SELECT * FROM attendance WHERE employee_id = ? AND date = ?', [employee_id, date]);
     if (existing.length > 0) {
