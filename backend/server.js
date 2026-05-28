@@ -1,4 +1,5 @@
 require('dotenv').config();
+process.env.TZ = 'Asia/Kolkata'; // Force IST timezone globally
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -415,9 +416,10 @@ app.delete('/api/admin/employees/:id', authenticateToken, async (req, res) => {
 app.post('/api/employees/attendance', authenticateToken, async (req, res) => {
   try {
     const employee_id = req.user.id;
-    const istTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-    const date = istTime.getFullYear() + '-' + String(istTime.getMonth() + 1).padStart(2, '0') + '-' + String(istTime.getDate()).padStart(2, '0');
-    const time_in = String(istTime.getHours()).padStart(2, '0') + ':' + String(istTime.getMinutes()).padStart(2, '0') + ':' + String(istTime.getSeconds()).padStart(2, '0');
+    const now = new Date();
+    // Force IST (Asia/Kolkata) timezone for precise real-time attendance
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
+    const time_in = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', timeStyle: 'medium' }).format(now);
 
     const [existing] = await pool.query('SELECT * FROM attendance WHERE employee_id = ? AND date = ?', [employee_id, date]);
     if (existing.length > 0) {
