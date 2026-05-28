@@ -14,7 +14,9 @@ const cron = require('node-cron');
 const crypto = require('crypto');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: process.env.SMTP_PORT || 587,
+  secure: process.env.SMTP_PORT == 465,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
@@ -123,7 +125,34 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Contact Form submission
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
 
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: 'mirafuturetechvision@gmail.com', // Admin email
+      subject: `New Contact Form Submission from ${name}`,
+      text: `You have received a new message.\n\nName: ${name}\nEmail: ${email}\nMessage: ${message}`,
+      html: `
+        <h3>New Contact Form Message</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong><br/>${message.replace(/\n/g, '<br/>')}</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: 'Message sent successfully' });
+  } catch (error) {
+    console.error('Contact Form Error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
 
 app.get('/api/users/me', authenticateToken, async (req, res) => {
   try {
@@ -162,12 +191,51 @@ app.post('/api/internships/apply', async (req, res) => {
   }
 });
 
+// Submit hiring application (Join Venuguard)
+app.post('/api/hiring/apply', async (req, res) => {
+  try {
+    const {
+      full_name, mobile_number, email, resume_link, position, skills, introduction
+    } = req.body;
+
+    if (!full_name || !mobile_number || !email || !resume_link || !position || !skills || !introduction) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const query = `
+      INSERT INTO hiring_applications (
+        full_name, mobile_number, email, resume_link, position, skills, introduction
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await pool.query(query, [
+      full_name, mobile_number, email, resume_link, position, skills, introduction
+    ]);
+
+    res.status(201).json({ message: 'Application submitted successfully! Our team will review it shortly.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to submit application. Please try again.' });
+  }
+});
+
 // Get all internships (Admin only)
 app.get('/api/internships', authenticateToken, async (req, res) => {
   try {
     const [internships] = await pool.query('SELECT * FROM internships ORDER BY created_at DESC');
     res.json(internships);
   } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all hiring applications (Admin only)
+app.get('/api/admin/hiring-applications', authenticateToken, async (req, res) => {
+  try {
+    const [applications] = await pool.query('SELECT * FROM hiring_applications ORDER BY created_at DESC');
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching hiring applications:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -207,6 +275,38 @@ app.post('/api/employees/login', async (req, res) => {
 
     if (!user.verified) return res.status(403).json({ error: 'Account not verified by admin yet' });
 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60000); // 10 minutes
+
+    await pool.query('UPDATE employees SET otp = ?, otp_expiry = ? WHERE id = ?', [otp, otpExpiry, user.id]);
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: 'Your Login OTP',
+      html: `<h3>Your Verification Code</h3><p>Your OTP for login is: <strong style="font-size:24px;">${otp}</strong></p><p>This code will expire in 10 minutes.</p>`
+    });
+
+    res.json({ require2FA: true, email: user.email, message: 'OTP sent to your email.' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Employee Verify Login OTP
+app.post('/api/employees/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+
+    const [users] = await pool.query('SELECT * FROM employees WHERE email = ? AND otp = ? AND otp_expiry > NOW()', [email, otp]);
+    if (users.length === 0) return res.status(400).json({ error: 'Invalid or expired OTP' });
+
+    const user = users[0];
+    
+    // Clear OTP
+    await pool.query('UPDATE employees SET otp = NULL, otp_expiry = NULL WHERE id = ?', [user.id]);
+
     const token = jwt.sign({ id: user.id, email: user.email, role: 'employee' }, process.env.JWT_SECRET, { expiresIn: '24h' });
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, designation: user.designation } });
   } catch (error) {
@@ -221,29 +321,26 @@ app.post('/api/employees/forgot-password', async (req, res) => {
     const [users] = await pool.query('SELECT * FROM employees WHERE email = ?', [email]);
     if (users.length === 0) return res.status(404).json({ error: 'User with this email not found' });
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60000); // 10 minutes
 
-    await pool.query('UPDATE employees SET reset_token = ?, reset_token_expiry = ? WHERE email = ?', [resetToken, resetTokenExpiry, email]);
+    await pool.query('UPDATE employees SET otp = ?, otp_expiry = ? WHERE email = ?', [otp, otpExpiry, email]);
 
-    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
-    
     await transporter.sendMail({
-      from: process.env.SMTP_FROM,
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: email,
-      subject: 'Password Reset Request',
+      subject: 'Password Reset OTP',
       html: `
         <h2>Password Reset Request</h2>
         <p>You requested a password reset for your employee account.</p>
-        <p>Click the link below to reset your password. This link is valid for 1 hour.</p>
+        <p>Your OTP for password reset is: <strong style="font-size:24px;">${otp}</strong></p>
+        <p>This code will expire in 10 minutes.</p>
         <br/>
-        <a href="${resetLink}" style="display:inline-block;padding:10px 20px;background-color:#2563eb;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">Reset Password</a>
-        <br/><br/>
         <p>If you did not request this, please ignore this email.</p>
       `
     });
 
-    res.json({ message: 'Password reset link sent to your email' });
+    res.json({ message: 'OTP sent to your email for password reset' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to process forgot password request' });
@@ -253,14 +350,14 @@ app.post('/api/employees/forgot-password', async (req, res) => {
 // Employee Reset Password
 app.post('/api/employees/reset-password', async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Email, OTP and new password required' });
 
-    const [users] = await pool.query('SELECT * FROM employees WHERE reset_token = ? AND reset_token_expiry > NOW()', [token]);
-    if (users.length === 0) return res.status(400).json({ error: 'Invalid or expired reset token' });
+    const [users] = await pool.query('SELECT * FROM employees WHERE email = ? AND otp = ? AND otp_expiry > NOW()', [email, otp]);
+    if (users.length === 0) return res.status(400).json({ error: 'Invalid or expired OTP' });
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE employees SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [hashedPassword, users[0].id]);
+    await pool.query('UPDATE employees SET password = ?, otp = NULL, otp_expiry = NULL WHERE id = ?', [hashedPassword, users[0].id]);
 
     res.json({ message: 'Password has been reset successfully' });
   } catch (error) {

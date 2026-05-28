@@ -77,10 +77,15 @@ const initDb = async () => {
       await pool.query('ALTER TABLE employees ADD COLUMN emp_id VARCHAR(50) UNIQUE AFTER id');
     } catch (e) {}
     
-    // Add password reset columns to employees
+    // Add password reset and OTP columns to employees
     try {
       await pool.query('ALTER TABLE employees ADD COLUMN reset_token VARCHAR(255) DEFAULT NULL');
       await pool.query('ALTER TABLE employees ADD COLUMN reset_token_expiry DATETIME DEFAULT NULL');
+    } catch (e) {}
+
+    try {
+      await pool.query('ALTER TABLE employees ADD COLUMN otp VARCHAR(10) DEFAULT NULL');
+      await pool.query('ALTER TABLE employees ADD COLUMN otp_expiry DATETIME DEFAULT NULL');
     } catch (e) {}
 
     await pool.query(`
@@ -110,6 +115,21 @@ const initDb = async () => {
         unanswered INT DEFAULT 0,
         total INT DEFAULT 0,
         percentage DECIMAL(5,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hiring_applications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        full_name VARCHAR(255) NOT NULL,
+        mobile_number VARCHAR(20) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        resume_link VARCHAR(255) NOT NULL,
+        position VARCHAR(100) NOT NULL,
+        skills TEXT NOT NULL,
+        introduction TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -168,12 +188,17 @@ const initDb = async () => {
         employee_id INT,
         file_url VARCHAR(255),
         file_name VARCHAR(255),
+        comment TEXT,
+        time_spent DECIMAL(5,2) DEFAULT 0,
         status VARCHAR(50) DEFAULT 'Submitted',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
     `);
+
+    try { await pool.query('ALTER TABLE submissions ADD COLUMN comment TEXT'); } catch(e) {}
+    try { await pool.query('ALTER TABLE submissions ADD COLUMN time_spent DECIMAL(5,2) DEFAULT 0'); } catch(e) {}
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -183,6 +208,22 @@ const initDb = async () => {
         message TEXT NOT NULL,
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_id VARCHAR(255) NOT NULL,
+        payment_id VARCHAR(255) DEFAULT NULL,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        domain VARCHAR(100) NOT NULL,
+        amount INT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Created',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
 
