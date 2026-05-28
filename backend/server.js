@@ -9,9 +9,11 @@ const { Server } = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { OAuth2Client } = require('google-auth-library');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 const crypto = require('crypto');
+const Razorpay = require('razorpay');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -767,6 +769,68 @@ app.get('/api/analytics/pm', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+// Razorpay Instance
+const razorpayInstance = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_secret',
+});
+
+// Razorpay: Create Order
+app.post('/api/payment/create-order', async (req, res) => {
+  try {
+    const { name, email, phone, domain } = req.body;
+    const amount = 2499 * 100; // Amount in paise
+
+    const options = {
+      amount,
+      currency: 'INR',
+      receipt: `rcpt_${Date.now()}`
+    };
+
+    const order = await razorpayInstance.orders.create(options);
+
+    // Save order in database
+    await pool.query(
+      'INSERT INTO payments (order_id, name, email, phone, domain, amount) VALUES (?, ?, ?, ?, ?, ?)',
+      [order.id, name, email, phone, domain, amount]
+    );
+
+    res.json({ orderId: order.id, amount, currency: order.currency });
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({ error: 'Failed to create payment order' });
+  }
+});
+
+// Razorpay: Verify Payment
+app.post('/api/payment/verify', async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'dummy_secret';
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(body.toString())
+      .digest('hex');
+
+    if (expectedSignature === razorpay_signature) {
+      // Payment successful, update database
+      await pool.query(
+        "UPDATE payments SET status = 'Paid', payment_id = ? WHERE order_id = ?",
+        [razorpay_payment_id, razorpay_order_id]
+      );
+      res.json({ message: 'Payment verified successfully' });
+    } else {
+      res.status(400).json({ error: 'Invalid signature, payment verification failed' });
+    }
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({ error: 'Failed to verify payment' });
   }
 });
 
