@@ -345,8 +345,8 @@ app.post('/api/employees/forgot-password', async (req, res) => {
 
     res.json({ message: 'OTP sent to your email for password reset' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to process forgot password request' });
+    console.error('Forgot Password Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to process forgot password request' });
   }
 });
 
@@ -383,7 +383,7 @@ app.get('/api/employees/me', authenticateToken, async (req, res) => {
 // Admin routes for Employees
 app.get('/api/admin/employees', authenticateToken, async (req, res) => {
   try {
-    const [employees] = await pool.query('SELECT id, emp_id, name, email, number, designation, resume_link, address, verified, created_at FROM employees ORDER BY created_at DESC');
+    const [employees] = await pool.query('SELECT id, emp_id, name, email, number, designation, resume_link, address, verified, checkin_deadline, checkout_time, created_at FROM employees ORDER BY created_at DESC');
     res.json(employees);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -393,8 +393,11 @@ app.get('/api/admin/employees', authenticateToken, async (req, res) => {
 app.put('/api/admin/employees/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { designation, verified } = req.body;
-    await pool.query('UPDATE employees SET designation = COALESCE(?, designation), verified = COALESCE(?, verified) WHERE id = ?', [designation, verified, id]);
+    const { designation, verified, checkin_deadline, checkout_time } = req.body;
+    await pool.query(
+      'UPDATE employees SET designation = COALESCE(?, designation), verified = COALESCE(?, verified), checkin_deadline = COALESCE(?, checkin_deadline), checkout_time = COALESCE(?, checkout_time) WHERE id = ?', 
+      [designation, verified, checkin_deadline, checkout_time, id]
+    );
     res.json({ message: 'Employee updated' });
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -412,22 +415,94 @@ app.delete('/api/admin/employees/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin delete endpoints for Internships, Hiring, and Campus Ambassadors
+app.delete('/api/admin/internships/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM internships WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Internship application removed' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/hiring-applications/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM hiring_applications WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Hiring application removed' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.delete('/api/admin/campus-ambassadors/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM campus_ambassadors WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Campus Ambassador removed' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+
 // Submit Attendance (Employee)
 app.post('/api/employees/attendance', authenticateToken, async (req, res) => {
   try {
     const employee_id = req.user.id;
+    const { location } = req.body;
     const now = new Date();
     // Force IST (Asia/Kolkata) timezone for precise real-time attendance
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
     const time_in = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', timeStyle: 'medium' }).format(now);
+
+    const [empInfo] = await pool.query('SELECT checkin_deadline FROM employees WHERE id = ?', [employee_id]);
+    if (empInfo.length === 0) return res.status(404).json({ error: 'Employee not found' });
+    const deadline = empInfo[0].checkin_deadline || '11:00:00';
+
+    if (time_in > deadline) {
+      return res.status(400).json({ error: `You cannot check in after your deadline of ${deadline}` });
+    }
 
     const [existing] = await pool.query('SELECT * FROM attendance WHERE employee_id = ? AND date = ?', [employee_id, date]);
     if (existing.length > 0) {
       return res.status(400).json({ error: 'Attendance already marked for today' });
     }
 
-    await pool.query('INSERT INTO attendance (employee_id, date, time_in) VALUES (?, ?, ?)', [employee_id, date, time_in]);
+    await pool.query('INSERT INTO attendance (employee_id, date, time_in, location_in) VALUES (?, ?, ?, ?)', [employee_id, date, time_in, location || 'Unknown Location']);
     res.json({ message: 'Attendance marked successfully' });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Checkout Attendance (Employee)
+app.put('/api/employees/attendance/checkout', authenticateToken, async (req, res) => {
+  try {
+    const employee_id = req.user.id;
+    const { location } = req.body;
+    const now = new Date();
+    // Force IST (Asia/Kolkata) timezone for precise real-time attendance
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
+    const time_out = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', timeStyle: 'medium' }).format(now);
+
+    const [empInfo] = await pool.query('SELECT checkout_time FROM employees WHERE id = ?', [employee_id]);
+    if (empInfo.length === 0) return res.status(404).json({ error: 'Employee not found' });
+    const earliestCheckout = empInfo[0].checkout_time || '17:30:00';
+
+    if (time_out < earliestCheckout) {
+      return res.status(400).json({ error: `You cannot check out before your shift ends at ${earliestCheckout}` });
+    }
+
+    const [existing] = await pool.query('SELECT * FROM attendance WHERE employee_id = ? AND date = ?', [employee_id, date]);
+    if (existing.length === 0) {
+      return res.status(400).json({ error: 'You have not checked in today' });
+    }
+
+    if (existing[0].time_out) {
+      return res.status(400).json({ error: 'You have already checked out today' });
+    }
+
+    await pool.query('UPDATE attendance SET time_out = ?, location_out = ? WHERE employee_id = ? AND date = ?', [time_out, location || 'Unknown Location', employee_id, date]);
+    res.json({ message: 'Checked out successfully' });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
@@ -834,6 +909,111 @@ app.post('/api/payment/verify', async (req, res) => {
   } catch (error) {
     console.error('Error verifying payment:', error);
     res.status(500).json({ error: 'Failed to verify payment' });
+  }
+});
+
+// ==========================================
+// CAMPUS AMBASSADOR ROUTES
+// ==========================================
+
+// Register Campus Ambassador
+app.post('/api/campus/register', async (req, res) => {
+  try {
+    let { name, email, password, phone, college_name } = req.body;
+    email = email.trim();
+    
+    // Validate domain
+    if (!email.toLowerCase().endsWith('@gmail.com')) {
+      return res.status(400).json({ error: 'Only @gmail.com email addresses are allowed.' });
+    }
+
+    // Check if email exists
+    const [existing] = await pool.query('SELECT * FROM campus_ambassadors WHERE email = ?', [email]);
+    if (existing.length > 0) return res.status(400).json({ error: 'Email already registered' });
+
+    // Generate unique referral code
+    const referral_code = 'CA-' + Math.random().toString(36).substring(2, 8).toUpperCase() + Date.now().toString().slice(-4);
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      'INSERT INTO campus_ambassadors (name, email, password, phone, college_name, referral_code) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, phone, college_name, referral_code]
+    );
+
+    res.json({ message: 'Campus Ambassador registered successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to register' });
+  }
+});
+
+// Login Campus Ambassador
+app.post('/api/campus/login', async (req, res) => {
+  try {
+    let { email, password } = req.body;
+    console.log(`[LOGIN ATTEMPT] Email: '${email}' | Password Length: ${password ? password.length : 0}`);
+    email = email?.trim() || '';
+    
+    const [ambassadors] = await pool.query('SELECT * FROM campus_ambassadors WHERE email = ?', [email]);
+    const ambassador = ambassadors[0];
+
+    if (!ambassador) {
+      console.log('[LOGIN FAILED] Email not found in DB');
+      return res.status(400).json({ error: 'Email not found or Invalid credentials' });
+    }
+
+    if (ambassador.status !== 'Active') {
+      console.log('[LOGIN FAILED] Account inactive');
+      return res.status(403).json({ error: 'Account inactive' });
+    }
+
+    const validPassword = await bcrypt.compare(password, ambassador.password);
+    if (!validPassword) {
+      console.log('[LOGIN FAILED] Password mismatch');
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    console.log('[LOGIN SUCCESS] Token generated');
+
+    const token = jwt.sign({ id: ambassador.id, role: 'campus_ambassador' }, process.env.JWT_SECRET || 'secret123', { expiresIn: '24h' });
+    
+    res.json({
+      token,
+      user: {
+        id: ambassador.id,
+        name: ambassador.name,
+        email: ambassador.email,
+        college_name: ambassador.college_name,
+        referral_code: ambassador.referral_code,
+        referrals_count: ambassador.referrals_count
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Get Campus Ambassador Profile
+app.get('/api/campus/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
+    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, status, created_at FROM campus_ambassadors WHERE id = ?', [req.user.id]);
+    res.json(ambassadors[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Get all Campus Ambassadors (Admin)
+app.get('/api/admin/campus-ambassadors', authenticateToken, async (req, res) => {
+  try {
+    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, status, created_at FROM campus_ambassadors ORDER BY created_at DESC');
+    res.json(ambassadors);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch campus ambassadors' });
   }
 });
 

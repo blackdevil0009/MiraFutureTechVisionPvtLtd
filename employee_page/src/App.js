@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -47,6 +47,15 @@ function AppRoutes() {
 }
 
 function App() {
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        () => console.log("Location access granted."),
+        (err) => console.warn("Location access denied or failed:", err)
+      );
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <Router>

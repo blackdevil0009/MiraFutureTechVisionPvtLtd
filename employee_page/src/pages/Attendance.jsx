@@ -11,6 +11,12 @@ const Attendance = () => {
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchAttendance = async () => {
     try {
@@ -30,12 +36,23 @@ const Attendance = () => {
     fetchAttendance();
   }, []);
 
-  const markAttendance = async () => {
-    setMarking(true);
-    setMessage({ text: '', type: '' });
+  const getLocationArea = async (lat, lon) => {
+    try {
+      const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+      if (res.data && res.data.address) {
+        const addr = res.data.address;
+        return addr.suburb || addr.city_district || addr.city || addr.town || addr.state_district || res.data.display_name;
+      }
+      return 'Unknown Area';
+    } catch (e) {
+      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    }
+  };
+
+  const executeAttendance = async (locationStr) => {
     try {
       const token = localStorage.getItem('emp_token');
-      await axios.post(`${API_URL}/api/employees/attendance`, {}, {
+      await axios.post(`${API_URL}/api/employees/attendance`, { location: locationStr }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage({ text: 'Attendance marked successfully!', type: 'success' });
@@ -47,9 +64,69 @@ const Attendance = () => {
     }
   };
 
+  const markAttendance = () => {
+    setMarking(true);
+    setMessage({ text: '', type: '' });
+    
+    if (!('geolocation' in navigator)) {
+      setMessage({ text: 'Geolocation is not supported by your browser', type: 'error' });
+      setMarking(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const area = await getLocationArea(pos.coords.latitude, pos.coords.longitude);
+        await executeAttendance(area);
+      },
+      (err) => {
+        setMessage({ text: 'Location access is required to mark attendance.', type: 'error' });
+        setMarking(false);
+      }
+    );
+  };
+  const executeCheckout = async (locationStr) => {
+    try {
+      const token = localStorage.getItem('emp_token');
+      await axios.put(`${API_URL}/api/employees/attendance/checkout`, { location: locationStr }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessage({ text: 'Checked out successfully!', type: 'success' });
+      fetchAttendance();
+    } catch (err) {
+      setMessage({ text: err.response?.data?.error || 'Failed to check out', type: 'error' });
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const markCheckout = () => {
+    setMarking(true);
+    setMessage({ text: '', type: '' });
+    
+    if (!('geolocation' in navigator)) {
+      setMessage({ text: 'Geolocation is not supported by your browser', type: 'error' });
+      setMarking(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const area = await getLocationArea(pos.coords.latitude, pos.coords.longitude);
+        await executeCheckout(area);
+      },
+      (err) => {
+        setMessage({ text: 'Location access is required to check out.', type: 'error' });
+        setMarking(false);
+      }
+    );
+  };
 
 
-  const hasMarkedToday = records.length > 0 && new Date(records[0].date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+
+
+  const hasCheckedIn = records.length > 0 && new Date(records[0].date).toLocaleDateString() === new Date().toLocaleDateString();
+  const hasCheckedOut = hasCheckedIn && !!records[0].time_out;
 
   return (
     <div className="text-white">
@@ -57,21 +134,34 @@ const Attendance = () => {
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="md:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-8 flex flex-col justify-center items-center text-center">
             <h2 className="text-2xl font-bold mb-2">Mark Today's Attendance</h2>
-            <p className="text-slate-400 mb-6">Current Server Time: {new Date().toLocaleTimeString()}</p>
-            
+            <div className="text-slate-400 mb-6 flex flex-col items-center gap-1">
+              <span className="text-sm uppercase tracking-wider font-semibold">Current Time</span>
+              <span className="text-3xl font-mono text-emerald-400 font-bold tracking-tight bg-slate-900/50 px-4 py-2 rounded-xl border border-slate-700">
+                {currentTime.toLocaleTimeString()}
+              </span>
+            </div>
+
             {message.text && (
               <div className={`mb-6 p-4 rounded-xl w-full max-w-sm ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
                 {message.text}
               </div>
             )}
 
-            {hasMarkedToday ? (
+            {hasCheckedOut ? (
               <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-6 py-4 rounded-full border border-emerald-500/20 font-semibold">
-                <CheckCircle className="w-6 h-6" /> You have successfully marked attendance for today.
+                <CheckCircle className="w-6 h-6" /> You have successfully completed today's attendance.
               </div>
+            ) : hasCheckedIn ? (
+              <button
+                onClick={markCheckout}
+                disabled={marking}
+                className={`flex items-center gap-2 px-8 py-4 rounded-full font-bold text-lg shadow-lg transition-all ${marking ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-500 text-white hover:shadow-rose-500/25 active:scale-95'}`}
+              >
+                {marking ? 'Processing...' : <><Clock className="w-6 h-6" /> Check Out Now</>}
+              </button>
             ) : (
-              <button 
-                onClick={markAttendance} 
+              <button
+                onClick={markAttendance}
                 disabled={marking}
                 className={`flex items-center gap-2 px-8 py-4 rounded-full font-bold text-lg shadow-lg transition-all ${marking ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/25 active:scale-95'}`}
               >
@@ -108,6 +198,7 @@ const Attendance = () => {
                   <tr>
                     <th className="px-6 py-4 font-semibold">Date</th>
                     <th className="px-6 py-4 font-semibold">Time In</th>
+                    <th className="px-6 py-4 font-semibold">Time Out</th>
                     <th className="px-6 py-4 font-semibold">Status</th>
                   </tr>
                 </thead>
@@ -116,6 +207,7 @@ const Attendance = () => {
                     <tr key={record.id} className="hover:bg-slate-700/30 transition-colors">
                       <td className="px-6 py-4 text-white font-medium">{new Date(record.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}</td>
                       <td className="px-6 py-4 font-mono text-blue-400">{record.time_in}</td>
+                      <td className="px-6 py-4 font-mono text-rose-400">{record.time_out || '--:--:--'}</td>
                       <td className="px-6 py-4">
                         <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
                           {record.status}

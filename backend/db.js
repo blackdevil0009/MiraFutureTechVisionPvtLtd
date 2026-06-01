@@ -27,6 +27,31 @@ const initDb = async () => {
 
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(50) DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS campus_ambassadors (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        college_name VARCHAR(255) NOT NULL,
+        referral_code VARCHAR(50) NOT NULL UNIQUE,
+        referrals_count INT DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL UNIQUE,
@@ -89,6 +114,12 @@ const initDb = async () => {
       await pool.query('ALTER TABLE employees ADD COLUMN otp_expiry DATETIME DEFAULT NULL');
     } catch (e) {}
 
+    // Add shift timing settings for employees
+    try {
+      await pool.query("ALTER TABLE employees ADD COLUMN checkin_deadline TIME DEFAULT '11:00:00'");
+      await pool.query("ALTER TABLE employees ADD COLUMN checkout_time TIME DEFAULT '17:30:00'");
+    } catch (e) {}
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS attendance (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -100,6 +131,16 @@ const initDb = async () => {
         UNIQUE KEY emp_date (employee_id, date)
       )
     `);
+
+    // Add time_out column for attendance checkout if it doesn't exist
+    try { await pool.query('ALTER TABLE attendance ADD COLUMN time_out TIME DEFAULT NULL AFTER time_in'); } catch (e) {}
+    
+    // Add location columns for attendance tracking
+    try {
+      await pool.query('ALTER TABLE attendance ADD COLUMN location_in VARCHAR(255) DEFAULT NULL');
+      await pool.query('ALTER TABLE attendance ADD COLUMN location_out VARCHAR(255) DEFAULT NULL');
+    } catch (e) {}
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS quiz_results (
         id INT AUTO_INCREMENT PRIMARY KEY,
