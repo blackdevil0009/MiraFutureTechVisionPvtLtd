@@ -1094,7 +1094,7 @@ app.post('/api/payment/create-order', async (req, res) => {
       [order.id, name, email, phone, domain, amount]
     );
 
-    res.json({ orderId: order.id, amount, currency: order.currency });
+    res.json({ orderId: order.id, amount, currency: order.currency, key: process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy' });
   } catch (error) {
     console.error('Error creating order:', error);
     res.status(500).json({ error: 'Failed to create payment order' });

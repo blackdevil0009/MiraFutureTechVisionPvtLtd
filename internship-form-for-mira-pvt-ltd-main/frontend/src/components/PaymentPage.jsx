@@ -38,7 +38,7 @@ const PaymentPage = ({ internship, applicant, onSuccess, onBack }) => {
 
       // 2. Initialize Razorpay Checkout
       const options = {
-        key: 'rzp_test_dummy', // Replace with your actual Razorpay Key ID
+        key: orderData.key, // Dynamic key from backend
         amount: orderData.amount,
         currency: orderData.currency,
         name: 'Mira Future Tech',
