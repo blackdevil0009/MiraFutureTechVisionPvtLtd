@@ -172,25 +172,243 @@ app.post('/api/internships/apply', async (req, res) => {
   try {
     const {
       full_name, email, phone, college_name, degree, branch,
-      year, duration, domain, skills, resume_link, message
+      year, duration, domain, skills, resume_link, message, payment_status
     } = req.body;
 
     const query = `
       INSERT INTO internships (
         full_name, email, phone, college_name, degree, branch,
-        year, duration, domain, skills, resume_link, message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        year, duration, domain, skills, resume_link, message, payment_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    await pool.query(query, [
+    const [result] = await pool.query(query, [
       full_name, email, phone, college_name, degree, branch,
-      year, duration, domain, skills, resume_link, message
+      year, duration, domain, skills, resume_link, message, payment_status || 'Pending'
     ]);
 
-    res.status(201).json({ message: 'Internship application submitted successfully' });
+    res.status(201).json({ message: 'Internship application submitted successfully', insertId: result.insertId });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
+
+// Admin: Manually Add Intern (Auto-Approved)
+app.post('/api/admin/internships/manual', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const {
+      full_name, email, phone, college_name, degree, branch,
+      year, duration, domain, skills, resume_link, message, payment_status
+    } = req.body;
+
+    const query = `
+      INSERT INTO internships (
+        full_name, email, phone, college_name, degree, branch,
+        year, duration, domain, skills, resume_link, message, payment_status, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
+    `;
+
+    const [result] = await pool.query(query, [
+      full_name, email, phone, college_name, degree, branch,
+      year, duration, domain, skills, resume_link, message, payment_status || 'Completed'
+    ]);
+
+    res.status(201).json({ message: 'Intern added and approved successfully', insertId: result.insertId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to add intern' });
+  }
+});
+
+// Admin: Approve Internship Application
+app.put('/api/admin/internships/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    await pool.query("UPDATE internships SET status = 'Approved' WHERE id = ?", [req.params.id]);
+    res.json({ message: 'Internship approved successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve internship' });
+  }
+});
+
+// Update internship payment status
+app.post('/api/internships/payment-update', async (req, res) => {
+  try {
+    const { email, transactionId, status } = req.body;
+    
+    // We update by email since we don't have the exact ID returned in all cases, or we can update by email and domain
+    const query = `
+      UPDATE internships 
+      SET payment_status = ?, transaction_id = ?
+      WHERE email = ?
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    
+    await pool.query(query, [status, transactionId, email]);
+    
+    res.status(200).json({ message: 'Payment status updated successfully' });
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
+// --- DOMAINS CRUD ---
+app.get('/api/domains', async (req, res) => {
+  try {
+    const [domains] = await pool.query('SELECT * FROM internship_domains ORDER BY created_at DESC');
+    res.json(domains);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch domains' });
+  }
+});
+
+app.post('/api/admin/domains', authenticateToken, async (req, res) => {
+  try {
+    const { title, category, type, duration, stipend, features, skills, popular, price } = req.body;
+    const query = 'INSERT INTO internship_domains (title, category, type, duration, stipend, features, skills, popular, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    await pool.query(query, [title, category, type, duration, stipend, JSON.stringify(features), JSON.stringify(skills), popular, price]);
+    res.status(201).json({ message: 'Domain added' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.put('/api/admin/domains/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, category, type, duration, stipend, features, skills, popular, price } = req.body;
+    const query = 'UPDATE internship_domains SET title=?, category=?, type=?, duration=?, stipend=?, features=?, skills=?, popular=?, price=? WHERE id=?';
+    await pool.query(query, [title, category, type, duration, stipend, JSON.stringify(features), JSON.stringify(skills), popular, price, req.params.id]);
+    res.json({ message: 'Domain updated' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/admin/domains/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM internship_domains WHERE id=?', [req.params.id]);
+    res.json({ message: 'Domain deleted' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// --- BENEFITS CRUD ---
+app.get('/api/benefits', async (req, res) => {
+  try {
+    const [benefits] = await pool.query('SELECT * FROM benefits ORDER BY created_at DESC');
+    res.json(benefits);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch benefits' });
+  }
+});
+
+app.post('/api/admin/benefits', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, icon } = req.body;
+    await pool.query('INSERT INTO benefits (title, description, icon) VALUES (?, ?, ?)', [title, description, icon]);
+    res.status(201).json({ message: 'Benefit added' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.put('/api/admin/benefits/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, icon } = req.body;
+    await pool.query('UPDATE benefits SET title=?, description=?, icon=? WHERE id=?', [title, description, icon, req.params.id]);
+    res.json({ message: 'Benefit updated' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/admin/benefits/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM benefits WHERE id=?', [req.params.id]);
+    res.json({ message: 'Benefit deleted' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// --- STUDENT AUTHENTICATION ---
+app.post('/api/student/request-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const [interns] = await pool.query("SELECT id, full_name, status FROM internships WHERE email = ? AND status = 'Approved'", [email]);
+    
+    if (interns.length === 0) {
+      return res.status(404).json({ error: 'Email not found or application is pending approval' });
+    }
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    
+    await pool.query('UPDATE internships SET otp = ?, otp_expiry = ? WHERE email = ?', [otp, expiry, email]);
+    
+    // Send email asynchronously in the background so the API responds instantly
+    transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: 'Student Portal Login OTP',
+      html: `<h3>Your Login Code</h3><p>Your OTP for the student portal is: <strong style="font-size:24px;">${otp}</strong></p><p>This code will expire in 10 minutes.</p>`
+    }).catch(err => console.error('Background OTP Email Error:', err));
+    
+    res.json({ message: 'OTP sent to your email' });
+  } catch (error) {
+    console.error('OTP Request Error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+app.post('/api/student/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const [interns] = await pool.query('SELECT * FROM internships WHERE email = ?', [email]);
+    
+    if (interns.length === 0) return res.status(404).json({ error: 'User not found' });
+    
+    const intern = interns[0];
+    
+    if (!intern.otp || intern.otp !== otp) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+    
+    if (new Date() > new Date(intern.otp_expiry)) {
+      return res.status(400).json({ error: 'OTP has expired' });
+    }
+    
+    // Clear OTP
+    await pool.query('UPDATE internships SET otp = NULL, otp_expiry = NULL WHERE email = ?', [email]);
+    
+    const token = jwt.sign(
+      { id: intern.id, email: intern.email, role: 'student' },
+      process.env.JWT_SECRET || 'your_jwt_secret',
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ token, student: { name: intern.full_name, email: intern.email } });
+  } catch (error) {
+    console.error('OTP Verify Error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+app.get('/api/student/me', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    
+    const [interns] = await pool.query('SELECT full_name as name, email, phone, college_name, branch, domain, skills, resume_link, payment_status, created_at FROM internships WHERE id = ?', [req.user.id]);
+    
+    if (interns.length === 0) return res.status(404).json({ error: 'Student not found' });
+    
+    res.json(interns[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -859,11 +1077,11 @@ const razorpayInstance = new Razorpay({
 // Razorpay: Create Order
 app.post('/api/payment/create-order', async (req, res) => {
   try {
-    const { name, email, phone, domain } = req.body;
-    const amount = 99 * 100; // Amount in paise
+    const { name, email, phone, domain, amount } = req.body;
+    const finalAmount = amount ? parseInt(amount) * 100 : 99 * 100; // Amount in paise
 
     const options = {
-      amount,
+      amount: finalAmount,
       currency: 'INR',
       receipt: `rcpt_${Date.now()}`
     };
@@ -1110,6 +1328,352 @@ cron.schedule('0 9 * * *', async () => {
     }
   } catch (error) {
     console.error('Error running overdue projects cron job:', error);
+  }
+});
+
+// --- INTERNSHIP MANAGEMENT APIs (ADMIN & STUDENT) ---
+
+// Admin: Upload a new project
+app.post('/api/admin/intern-projects', authenticateToken, upload.single('resource_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { target_audience, title, description } = req.body;
+    const resource_url = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    await pool.query(
+      'INSERT INTO intern_projects (target_audience, title, description, resource_url) VALUES (?, ?, ?, ?)',
+      [target_audience, title, description, resource_url]
+    );
+    res.json({ message: 'Project created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Admin: Get all projects
+app.get('/api/admin/intern-projects', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM intern_projects ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Admin: Get all submissions
+app.get('/api/admin/intern-submissions', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query(`
+      SELECT s.*, p.title as project_title, i.full_name as intern_name, i.domain 
+      FROM intern_submissions s 
+      JOIN intern_projects p ON s.project_id = p.id 
+      JOIN internships i ON s.intern_id = i.id 
+      ORDER BY s.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+// Admin: Update submission status
+app.put('/api/admin/intern-submissions/:id/status', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { status } = req.body;
+    await pool.query('UPDATE intern_submissions SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ message: 'Status updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// Admin: Get all intern attendance
+app.get('/api/admin/intern-attendance', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query(`
+      SELECT a.*, i.full_name as intern_name, i.domain, i.email, i.phone 
+      FROM intern_attendance a 
+      JOIN internships i ON a.intern_id = i.id 
+      ORDER BY a.date DESC, a.time_in DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+});
+
+// Admin: Get all certificates
+app.get('/api/admin/intern-certificates', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    
+    // Fetch all registered interns and their certificate status
+    const [rows] = await pool.query(`
+      SELECT i.id as intern_id, i.full_name as intern_name, i.domain,
+             c.id as cert_id, c.status as cert_status, c.issue_date, c.pdf_url
+      FROM internships i
+      LEFT JOIN intern_certificates c ON i.id = c.intern_id
+      ORDER BY i.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch certificates' });
+  }
+});
+
+// Admin: Batch Generate certificates
+app.post('/api/admin/intern-certificates/generate', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    
+    // Simplistic batch generate: find all approved interns and make certificates for them
+    const [approvedInterns] = await pool.query("SELECT id FROM internships WHERE status = 'Approved'");
+    const today = new Date().toISOString().split('T')[0];
+    
+    for (let intern of approvedInterns) {
+      await pool.query(
+        "INSERT INTO intern_certificates (intern_id, issue_date, status) VALUES (?, ?, 'Generated') ON DUPLICATE KEY UPDATE status='Generated'",
+        [intern.id, today]
+      );
+    }
+    
+    res.json({ message: 'Certificates generated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate certificates' });
+  }
+});
+
+// Admin: Manually Upload Certificate for a specific intern
+app.post('/api/admin/intern-certificates/upload', authenticateToken, upload.single('certificate_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { intern_id } = req.body;
+    const pdf_url = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    if (!pdf_url || !intern_id) {
+      return res.status(400).json({ error: 'File and intern ID are required' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Check if certificate record exists
+    const [existing] = await pool.query("SELECT id FROM intern_certificates WHERE intern_id = ?", [intern_id]);
+    
+    if (existing.length > 0) {
+      await pool.query(
+        "UPDATE intern_certificates SET pdf_url = ?, status = 'Generated', issue_date = ? WHERE intern_id = ?",
+        [pdf_url, today, intern_id]
+      );
+    } else {
+      await pool.query(
+        "INSERT INTO intern_certificates (intern_id, issue_date, status, pdf_url) VALUES (?, ?, 'Generated', ?)",
+        [intern_id, today, pdf_url]
+      );
+    }
+    
+    res.json({ message: 'Certificate uploaded successfully' });
+  } catch (error) {
+    console.error('Error uploading certificate:', error);
+    res.status(500).json({ error: 'Failed to upload certificate' });
+  }
+});
+
+// Student: Get their assigned projects
+app.get('/api/student/projects', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const [interns] = await pool.query('SELECT domain FROM internships WHERE id = ?', [req.user.id]);
+    const domain = interns[0]?.domain || '';
+    
+    const [projects] = await pool.query(
+      `SELECT p.*, s.status as submission_status, s.submission_url 
+       FROM intern_projects p 
+       LEFT JOIN intern_submissions s ON p.id = s.project_id AND s.intern_id = ? 
+       WHERE p.target_audience LIKE ? OR p.target_audience = 'All' 
+       ORDER BY p.created_at DESC`,
+      [req.user.id, `%${domain}%`]
+    );
+    res.json(projects);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// Student: Get Certificate
+app.get('/api/student/certificate', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM intern_certificates WHERE intern_id = ?', [req.user.id]);
+    if (rows.length === 0) return res.json(null);
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch certificate' });
+  }
+});
+
+// Student: Submit a project
+app.post('/api/student/submit-project', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const { project_id, submission_url } = req.body;
+    await pool.query(
+      `INSERT INTO intern_submissions (project_id, intern_id, submission_url, status) 
+       VALUES (?, ?, ?, 'Pending Review') 
+       ON DUPLICATE KEY UPDATE submission_url = ?, status = 'Pending Review'`,
+      [project_id, req.user.id, submission_url, submission_url]
+    );
+    res.json({ message: 'Project submitted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to submit project' });
+  }
+});
+
+// Student: Select a project (Add to Kanban)
+app.post('/api/student/select-project', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const { project_id } = req.body;
+    await pool.query(
+      `INSERT INTO intern_submissions (project_id, intern_id, status) 
+       VALUES (?, ?, 'Started')
+       ON DUPLICATE KEY UPDATE status = status`, // Don't overwrite if it already exists
+      [project_id, req.user.id]
+    );
+    res.json({ message: 'Project added to Kanban successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to select project' });
+  }
+});
+
+// Student: Get profile
+app.get('/api/student/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT full_name, email, phone, college_name, skills, resume_link, domain FROM internships WHERE id = ?', [req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Profile not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Student: Update profile
+app.put('/api/student/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const { phone, college_name, skills, resume_link } = req.body;
+    await pool.query(
+      'UPDATE internships SET phone = ?, college_name = ?, skills = ?, resume_link = ? WHERE id = ?',
+      [phone, college_name, JSON.stringify(skills || []), resume_link, req.user.id]
+    );
+    res.json({ message: 'Profile updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Student: Dashboard stats
+app.get('/api/student/dashboard-stats', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    
+    // Get domain and status
+    const [interns] = await pool.query('SELECT domain, status FROM internships WHERE id = ?', [req.user.id]);
+    if (interns.length === 0) return res.status(404).json({ error: 'Intern not found' });
+    const domain = interns[0].domain;
+    const internshipStatus = interns[0].status;
+
+    // Get attendance count
+    const [attendanceRows] = await pool.query('SELECT COUNT(*) as days FROM intern_attendance WHERE intern_id = ?', [req.user.id]);
+    const attendanceDays = attendanceRows[0].days;
+
+    // Get assigned projects count
+    const [assignedProjects] = await pool.query("SELECT COUNT(*) as count FROM intern_projects WHERE target_audience LIKE ? OR target_audience = 'All'", [`%${domain}%`]);
+    
+    // Get submitted projects count
+    const [submittedProjects] = await pool.query("SELECT COUNT(*) as count FROM intern_submissions WHERE intern_id = ?", [req.user.id]);
+    
+    const pendingTasks = Math.max(0, assignedProjects[0].count - submittedProjects[0].count);
+
+    // Get recent projects
+    const [recentProjects] = await pool.query(
+      "SELECT id, title, description, created_at FROM intern_projects WHERE target_audience LIKE ? OR target_audience = 'All' ORDER BY created_at DESC LIMIT 3", 
+      [`%${domain}%`]
+    );
+
+    res.json({
+      status: internshipStatus,
+      pending_tasks: pendingTasks,
+      attendance_days: attendanceDays,
+      recent_projects: recentProjects
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+  }
+});
+
+// Student: Get their attendance
+app.get('/api/student/attendance', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM intern_attendance WHERE intern_id = ? ORDER BY date DESC', [req.user.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+});
+
+// Student: Check In
+app.post('/api/student/attendance/checkin', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const date = new Date().toISOString().split('T')[0];
+    const time_in = new Date().toLocaleTimeString('en-US', { hour12: false, timeZone: 'Asia/Kolkata' });
+    
+    await pool.query(
+      'INSERT INTO intern_attendance (intern_id, date, time_in, status) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE time_in = ?',
+      [req.user.id, date, time_in, 'Present', time_in]
+    );
+    res.json({ message: 'Checked in successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to check in' });
+  }
+});
+
+// Student: Check Out
+app.post('/api/student/attendance/checkout', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const date = new Date().toISOString().split('T')[0];
+    const time_out = new Date().toLocaleTimeString('en-US', { hour12: false, timeZone: 'Asia/Kolkata' });
+    
+    await pool.query(
+      'UPDATE intern_attendance SET time_out = ? WHERE intern_id = ? AND date = ?',
+      [time_out, req.user.id, date]
+    );
+    res.json({ message: 'Checked out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to check out' });
+  }
+});
+
+// Student: Get Certificate
+app.get('/api/student/certificate', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM intern_certificates WHERE intern_id = ?', [req.user.id]);
+    
+    if (rows.length === 0) {
+      return res.json({ status: 'Pending', pdf_url: null });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch certificate' });
   }
 });
 

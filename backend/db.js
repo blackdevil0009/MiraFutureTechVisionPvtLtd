@@ -82,6 +82,38 @@ const initDb = async () => {
       )
     `);
 
+    // Add payment and OTP fields to existing internships table
+    try { await pool.query('ALTER TABLE internships ADD COLUMN payment_status VARCHAR(50) DEFAULT "Pending"'); } catch (e) {}
+    try { await pool.query('ALTER TABLE internships ADD COLUMN transaction_id VARCHAR(255) DEFAULT NULL'); } catch (e) {}
+    try { await pool.query('ALTER TABLE internships ADD COLUMN otp VARCHAR(10) DEFAULT NULL'); } catch (e) {}
+    try { await pool.query('ALTER TABLE internships ADD COLUMN otp_expiry DATETIME DEFAULT NULL'); } catch (e) {}
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS internship_domains (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(255) NOT NULL,
+        type VARCHAR(50) DEFAULT 'Unpaid',
+        duration VARCHAR(100),
+        stipend VARCHAR(255),
+        features TEXT,
+        skills TEXT,
+        popular BOOLEAN DEFAULT FALSE,
+        price INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS benefits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        icon VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS employees (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -268,6 +300,59 @@ const initDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // --- INTERNSHIP MANAGEMENT TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS intern_projects (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        target_audience VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        resource_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS intern_submissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT,
+        intern_id INT,
+        submission_url VARCHAR(500),
+        status VARCHAR(50) DEFAULT 'Pending Review',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES intern_projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (intern_id) REFERENCES internships(id) ON DELETE CASCADE,
+        UNIQUE KEY intern_project (intern_id, project_id)
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS intern_attendance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        intern_id INT,
+        date DATE NOT NULL,
+        time_in TIME,
+        time_out TIME,
+        status VARCHAR(50) DEFAULT 'Present',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY intern_date (intern_id, date),
+        FOREIGN KEY (intern_id) REFERENCES internships(id) ON DELETE CASCADE
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS intern_certificates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        intern_id INT,
+        issue_date DATE,
+        status VARCHAR(50) DEFAULT 'Pending',
+        pdf_url VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (intern_id) REFERENCES internships(id) ON DELETE CASCADE
+      )
+    `);
+
 
     console.log("Database initialized successfully");
   } catch (error) {

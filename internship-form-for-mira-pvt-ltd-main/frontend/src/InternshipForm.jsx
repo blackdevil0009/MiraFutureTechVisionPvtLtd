@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const InternshipForm = () => {
+const InternshipForm = ({ internship, onSuccess }) => {
   const COURSE_CONFIG = {
     'B.Tech': {
       branches: ['CS', 'IT', 'AI', 'Data Science', 'ECE', 'Mechanical', 'Civil'],
@@ -39,7 +39,7 @@ const InternshipForm = () => {
     branch: 'CS',
     year: '1st',
     duration: '4 Years',
-    domain: 'Full Stack Development',
+    domain: internship?.title || 'Full Stack Development',
     skills: '',
     resume_link: '',
     message: '',
@@ -133,9 +133,14 @@ const InternshipForm = () => {
     setMessage({ type: '', text: '' });
 
     try {
+      const payload = {
+        ...formData,
+        payment_status: internship?.type === 'Unpaid' ? 'Free' : 'Pending'
+      };
+
       const response = await axios.post(
-        'https://api.mirafuturetechvision.com/api/internships/apply',
-        formData,
+        'http://localhost:5001/api/internships/apply',
+        payload,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -144,25 +149,29 @@ const InternshipForm = () => {
       );
 
       if (response.status === 201) {
-        setMessage({
-          type: 'success',
-          text: 'Application submitted successfully!',
-        });
+        if (onSuccess) {
+          onSuccess(formData);
+        } else {
+          setMessage({
+            type: 'success',
+            text: 'Application submitted successfully!',
+          });
 
-        setFormData({
-          full_name: '',
-          email: '',
-          phone: '',
-          college_name: '',
-          degree: 'B.Tech',
-          branch: 'CS',
-          year: '1st',
-          duration: '4 Years',
-          domain: 'Full Stack Development',
-          skills: '',
-          resume_link: '',
-          message: '',
-        });
+          setFormData({
+            full_name: '',
+            email: '',
+            phone: '',
+            college_name: '',
+            degree: 'B.Tech',
+            branch: 'CS',
+            year: '1st',
+            duration: '4 Years',
+            domain: internship?.title || 'Full Stack Development',
+            skills: '',
+            resume_link: '',
+            message: '',
+          });
+        }
       }
     } catch (error) {
       const errorMsg =
