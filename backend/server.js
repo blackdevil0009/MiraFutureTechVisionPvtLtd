@@ -1392,6 +1392,42 @@ app.get('/api/admin/intern-projects', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin: Edit a project
+app.put('/api/admin/intern-projects/:id', authenticateToken, upload.single('resource_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { target_audience, title, description } = req.body;
+    let query = 'UPDATE intern_projects SET target_audience = ?, title = ?, description = ?';
+    let params = [target_audience, title, description];
+    
+    if (req.file) {
+      query += ', resource_url = ?';
+      params.push(`/uploads/${req.file.filename}`);
+    }
+    
+    query += ' WHERE id = ?';
+    params.push(req.params.id);
+
+    await pool.query(query, params);
+    res.json({ message: 'Project updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+// Admin: Delete a project
+app.delete('/api/admin/intern-projects/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    await pool.query('DELETE FROM intern_projects WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Project deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete project' });
+  }
+});
+
 // Admin: Get distinct registered domains
 app.get('/api/admin/registered-domains', authenticateToken, async (req, res) => {
   try {
@@ -1431,6 +1467,17 @@ app.put('/api/admin/intern-submissions/:id/status', authenticateToken, async (re
     res.json({ message: 'Status updated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// Admin: Delete intern submission
+app.delete('/api/admin/intern-submissions/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    await pool.query('DELETE FROM intern_submissions WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Submission deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete submission' });
   }
 });
 
