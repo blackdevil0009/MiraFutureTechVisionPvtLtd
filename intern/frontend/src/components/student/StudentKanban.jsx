@@ -11,7 +11,7 @@ const StudentKanban = () => {
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('http://localhost:5001/api/student/projects', {
+      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/projects', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -61,7 +61,7 @@ const StudentKanban = () => {
     setSubmitStatus('submitting');
     try {
       const token = localStorage.getItem('studentToken');
-      await axios.post('http://localhost:5001/api/student/submit-project', {
+      await axios.post('https://api.mirafuturetechvision.com/api/student/submit-project', {
         project_id: submitModal.taskId,
         submission_url: submitModal.submissionUrl,
         github_url: submitModal.githubUrl

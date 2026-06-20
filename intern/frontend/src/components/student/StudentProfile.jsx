@@ -23,7 +23,7 @@ const StudentProfile = () => {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('http://localhost:5001/api/student/profile', {
+      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -51,7 +51,7 @@ const StudentProfile = () => {
     try {
       setSaveStatus('saving');
       const token = localStorage.getItem('studentToken');
-      await axios.put('http://localhost:5001/api/student/profile', profile, {
+      await axios.put('https://api.mirafuturetechvision.com/api/student/profile', profile, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSaveStatus('success');

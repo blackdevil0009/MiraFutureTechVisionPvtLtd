@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const InternshipForm = ({ internship, onSuccess }) => {
@@ -48,21 +48,39 @@ const InternshipForm = ({ internship, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const domains = [
-    'Full Stack Development',
-    'Frontend Development',
-    'Backend Development',
-    'Java Development',
-    'Python Development',
-    'Data Science',
-    'Artificial Intelligence',
-    'Machine Learning',
-    'Cyber Security',
-    'Cloud Computing',
-  ];
+  const [apiDomains, setApiDomains] = useState([]);
+  const [isCustomDomain, setIsCustomDomain] = useState(false);
+
+  useEffect(() => {
+    const fetchDomains = async () => {
+      try {
+        const res = await axios.get('https://api.mirafuturetechvision.com/api/domains');
+        const titles = res.data.map(d => d.title);
+        setApiDomains(titles);
+        if (formData.domain && !titles.includes(formData.domain) && formData.domain !== '') {
+          setIsCustomDomain(true);
+        }
+      } catch (error) {
+        console.error("Error fetching domains", error);
+        setApiDomains(['Full Stack Development', 'Frontend Development', 'Data Science', 'Cyber Security']);
+      }
+    };
+    fetchDomains();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    if (name === 'domain_select') {
+      if (value === 'Other') {
+        setIsCustomDomain(true);
+        setFormData(prev => ({ ...prev, domain: '' }));
+      } else {
+        setIsCustomDomain(false);
+        setFormData(prev => ({ ...prev, domain: value }));
+      }
+      return;
+    }
     
     if (name === 'degree') {
       const config = COURSE_CONFIG[value];
@@ -320,15 +338,36 @@ const InternshipForm = ({ internship, onSuccess }) => {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">Preferred Domain *</label>
-                <input
-                  type="text"
-                  name="domain"
-                  value={formData.domain}
-                  onChange={handleInputChange}
-                  placeholder="e.g. Web Development"
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  required
-                />
+                {isCustomDomain ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      name="domain"
+                      value={formData.domain}
+                      onChange={handleInputChange}
+                      placeholder="Type your custom domain..."
+                      className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      required
+                    />
+                    <button type="button" onClick={() => { setIsCustomDomain(false); setFormData(prev => ({ ...prev, domain: apiDomains[0] || 'Full Stack Development' })); }} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      ← Back to predefined domains
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    name="domain_select"
+                    value={apiDomains.includes(formData.domain) ? formData.domain : (formData.domain ? 'Other' : apiDomains[0])}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  >
+                    {apiDomains.map((dom) => (
+                      <option key={dom} value={dom} className="bg-gray-800">
+                        {dom}
+                      </option>
+                    ))}
+                    <option value="Other" className="bg-gray-800 font-bold text-blue-400">Other (Specify manually)</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">Resume / GitHub / LinkedIn URL (Optional)</label>

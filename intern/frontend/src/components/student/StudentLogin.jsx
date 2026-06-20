@@ -13,7 +13,7 @@ const StudentLogin = ({ onLoginSuccess, onBack }) => {
     setLoading(true);
     setError('');
     try {
-      await axios.post('http://localhost:5001/api/student/request-otp', { email });
+      await axios.post('https://api.mirafuturetechvision.com/api/student/request-otp', { email });
       setStep(2);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to request OTP. Make sure your email is registered.');
@@ -27,7 +27,7 @@ const StudentLogin = ({ onLoginSuccess, onBack }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('http://localhost:5001/api/student/verify-otp', { email, otp });
+      const res = await axios.post('https://api.mirafuturetechvision.com/api/student/verify-otp', { email, otp });
       localStorage.setItem('studentToken', res.data.token);
       onLoginSuccess(res.data.student);
     } catch (err) {
