@@ -189,7 +189,7 @@ const StudentProfile = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-500 mb-1">Resume Link (Google Drive, Notion, etc.)</label>
+              <label className="block text-sm font-medium text-slate-500 mb-1">Resume Link (Google Drive, Notion, etc.) (Optional)</label>
               <input 
                 type="url" 
                 value={profile.resume_link || ''} 

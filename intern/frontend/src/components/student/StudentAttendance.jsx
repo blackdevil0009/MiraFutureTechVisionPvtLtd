@@ -32,7 +32,7 @@ const StudentAttendance = ({ student }) => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('http://localhost:5001/api/student/attendance', {
+      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/attendance', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const records = res.data;
@@ -77,12 +77,12 @@ const StudentAttendance = ({ student }) => {
     try {
       const token = localStorage.getItem('studentToken');
       if (!isCheckedIn) {
-        await axios.post('http://localhost:5001/api/student/attendance/checkin', {}, {
+        await axios.post('https://api.mirafuturetechvision.com/api/student/attendance/checkin', {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
         if (timeLeft > 0) return; 
-        await axios.post('http://localhost:5001/api/student/attendance/checkout', {}, {
+        await axios.post('https://api.mirafuturetechvision.com/api/student/attendance/checkout', {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }

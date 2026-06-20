@@ -109,10 +109,6 @@ const InternshipForm = ({ internship, onSuccess }) => {
       return false;
     }
 
-    if (!formData.resume_link.trim()) {
-      setMessage({ type: 'error', text: 'Profile or Resume link is required' });
-      return false;
-    }
 
     if (!formData.message.trim()) {
       setMessage({ type: 'error', text: 'Message is required' });
@@ -139,7 +135,7 @@ const InternshipForm = ({ internship, onSuccess }) => {
       };
 
       const response = await axios.post(
-        'http://localhost:5001/api/internships/apply',
+        'https://api.mirafuturetechvision.com/api/internships/apply',
         payload,
         {
           headers: {
@@ -324,21 +320,18 @@ const InternshipForm = ({ internship, onSuccess }) => {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">Preferred Domain *</label>
-                <select
+                <input
+                  type="text"
                   name="domain"
                   value={formData.domain}
                   onChange={handleInputChange}
+                  placeholder="e.g. Web Development"
                   className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                >
-                  {domains.map((dom) => (
-                    <option key={dom} value={dom} className="bg-gray-800">
-                      {dom}
-                    </option>
-                  ))}
-                </select>
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Resume / GitHub / LinkedIn URL *</label>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Resume / GitHub / LinkedIn URL (Optional)</label>
                 <input
                   type="url"
                   name="resume_link"
@@ -346,7 +339,6 @@ const InternshipForm = ({ internship, onSuccess }) => {
                   onChange={handleInputChange}
                   placeholder="Link to Resume, GitHub, or LinkedIn"
                   className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  required
                 />
               </div>
             </div>

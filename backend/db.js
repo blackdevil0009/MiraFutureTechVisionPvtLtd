@@ -327,6 +327,8 @@ const initDb = async () => {
       )
     `);
 
+    try { await pool.query('ALTER TABLE intern_submissions ADD COLUMN github_url VARCHAR(500)'); } catch(e) {}
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS intern_attendance (
         id INT AUTO_INCREMENT PRIMARY KEY,

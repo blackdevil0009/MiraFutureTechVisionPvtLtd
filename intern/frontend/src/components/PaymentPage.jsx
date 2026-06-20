@@ -26,7 +26,7 @@ const PaymentPage = ({ internship, applicant, onSuccess, onBack }) => {
     setLoading(true);
     try {
       // 1. Create order on the backend
-      const orderResponse = await axios.post('http://localhost:5001/api/payment/create-order', {
+      const orderResponse = await axios.post('https://api.mirafuturetechvision.com/api/payment/create-order', {
         name: applicant.full_name,
         email: applicant.email,
         phone: applicant.phone,
@@ -48,7 +48,7 @@ const PaymentPage = ({ internship, applicant, onSuccess, onBack }) => {
         handler: async function (response) {
           try {
             // 3. Verify Payment
-            const verifyResponse = await axios.post('http://localhost:5001/api/payment/verify', {
+            const verifyResponse = await axios.post('https://api.mirafuturetechvision.com/api/payment/verify', {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature
@@ -56,7 +56,7 @@ const PaymentPage = ({ internship, applicant, onSuccess, onBack }) => {
 
             if (verifyResponse.data.message === 'Payment verified successfully') {
               // 4. Update internship payment status
-              await axios.post('http://localhost:5001/api/internships/payment-update', {
+              await axios.post('https://api.mirafuturetechvision.com/api/internships/payment-update', {
                 email: applicant.email,
                 transactionId: response.razorpay_payment_id,
                 status: 'Completed'

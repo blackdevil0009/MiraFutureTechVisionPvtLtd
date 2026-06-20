@@ -8,7 +8,7 @@ const Benefits = () => {
   useEffect(() => {
     const fetchBenefits = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/benefits');
+        const res = await axios.get('https://api.mirafuturetechvision.com/api/benefits');
         setBenefits(res.data);
       } catch (err) {
         console.error('Failed to fetch benefits', err);

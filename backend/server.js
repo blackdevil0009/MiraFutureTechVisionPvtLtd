@@ -1362,6 +1362,19 @@ app.get('/api/admin/intern-projects', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin: Get distinct registered domains
+app.get('/api/admin/registered-domains', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT DISTINCT domain FROM internships WHERE domain IS NOT NULL AND domain != "" ORDER BY domain ASC');
+    const domains = rows.map(r => r.domain);
+    res.json(domains);
+  } catch (error) {
+    console.error('Error fetching registered domains:', error);
+    res.status(500).json({ error: 'Failed to fetch domains' });
+  }
+});
+
 // Admin: Get all submissions
 app.get('/api/admin/intern-submissions', authenticateToken, async (req, res) => {
   try {
@@ -1488,18 +1501,21 @@ app.get('/api/student/projects', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
     const [interns] = await pool.query('SELECT domain FROM internships WHERE id = ?', [req.user.id]);
-    const domain = interns[0]?.domain || '';
+    const domain = interns[0]?.domain ? interns[0].domain.trim() : '';
+    console.log(`Student ${req.user.id} fetching projects for domain: '${domain}'`);
     
     const [projects] = await pool.query(
-      `SELECT p.*, s.status as submission_status, s.submission_url 
+      `SELECT p.*, s.status as submission_status, s.submission_url, s.github_url 
        FROM intern_projects p 
        LEFT JOIN intern_submissions s ON p.id = s.project_id AND s.intern_id = ? 
-       WHERE p.target_audience LIKE ? OR p.target_audience = 'All' 
+       WHERE LOWER(p.target_audience) LIKE LOWER(?) OR p.target_audience = 'All' 
        ORDER BY p.created_at DESC`,
       [req.user.id, `%${domain}%`]
     );
+    console.log(`Found ${projects.length} projects for student ${req.user.id}`);
     res.json(projects);
   } catch (error) {
+    console.error('Error fetching student projects:', error);
     res.status(500).json({ error: 'Failed to fetch projects' });
   }
 });
@@ -1520,15 +1536,16 @@ app.get('/api/student/certificate', authenticateToken, async (req, res) => {
 app.post('/api/student/submit-project', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
-    const { project_id, submission_url } = req.body;
+    const { project_id, submission_url, github_url } = req.body;
     await pool.query(
-      `INSERT INTO intern_submissions (project_id, intern_id, submission_url, status) 
-       VALUES (?, ?, ?, 'Pending Review') 
-       ON DUPLICATE KEY UPDATE submission_url = ?, status = 'Pending Review'`,
-      [project_id, req.user.id, submission_url, submission_url]
+      `INSERT INTO intern_submissions (project_id, intern_id, submission_url, github_url, status) 
+       VALUES (?, ?, ?, ?, 'Pending Review') 
+       ON DUPLICATE KEY UPDATE submission_url = ?, github_url = ?, status = 'Pending Review'`,
+      [project_id, req.user.id, submission_url, github_url, submission_url, github_url]
     );
     res.json({ message: 'Project submitted successfully' });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Failed to submit project' });
   }
 });

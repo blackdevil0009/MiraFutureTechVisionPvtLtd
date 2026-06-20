@@ -5,7 +5,7 @@ import { X, CheckCircle, ExternalLink } from 'lucide-react';
 const StudentKanban = () => {
   const [columns, setColumns] = useState({ todo: [], inProgress: [], done: [] });
   const [loading, setLoading] = useState(true);
-  const [submitModal, setSubmitModal] = useState({ isOpen: false, taskId: null, taskTitle: '', url: '' });
+  const [submitModal, setSubmitModal] = useState({ isOpen: false, taskId: null, taskTitle: '', submissionUrl: '', githubUrl: '' });
   const [submitStatus, setSubmitStatus] = useState('');
 
   const fetchProjects = async () => {
@@ -27,7 +27,8 @@ const StudentKanban = () => {
           priority: 'High',
           file: p.resource_url,
           status: p.submission_status,
-          submissionUrl: p.submission_url
+          submissionUrl: p.submission_url,
+          githubUrl: p.github_url
         };
 
         if (!p.submission_status) {
@@ -55,14 +56,15 @@ const StudentKanban = () => {
 
   const handleSubmitTask = async (e) => {
     e.preventDefault();
-    if (!submitModal.url) return;
+    if (!submitModal.submissionUrl && !submitModal.githubUrl) return alert("Please provide at least one URL.");
     
     setSubmitStatus('submitting');
     try {
       const token = localStorage.getItem('studentToken');
       await axios.post('http://localhost:5001/api/student/submit-project', {
         project_id: submitModal.taskId,
-        submission_url: submitModal.url
+        submission_url: submitModal.submissionUrl,
+        github_url: submitModal.githubUrl
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -71,7 +73,7 @@ const StudentKanban = () => {
       fetchProjects(); // refresh the board immediately
       
       setTimeout(() => {
-        setSubmitModal({ isOpen: false, taskId: null, taskTitle: '', url: '' });
+        setSubmitModal({ isOpen: false, taskId: null, taskTitle: '', submissionUrl: '', githubUrl: '' });
         setSubmitStatus('');
       }, 1500);
     } catch (error) {
@@ -114,7 +116,7 @@ const StudentKanban = () => {
       <div className="pt-3 border-t border-slate-100 mt-auto">
         {type === 'todo' && (
           <button 
-            onClick={() => setSubmitModal({ isOpen: true, taskId: task.id, taskTitle: task.title, url: '' })}
+            onClick={() => setSubmitModal({ isOpen: true, taskId: task.id, taskTitle: task.title, submissionUrl: '', githubUrl: '' })}
             className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-bold transition-colors shadow-sm"
           >
             Submit Task
@@ -127,9 +129,18 @@ const StudentKanban = () => {
               <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
               Pending Review
             </span>
-            <a href={task.submissionUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-600 transition-colors">
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            <div className="flex gap-2">
+              {task.githubUrl && (
+                <a href={task.githubUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-slate-800 transition-colors" title="GitHub Repository">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                </a>
+              )}
+              {task.submissionUrl && (
+                <a href={task.submissionUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-600 transition-colors" title="Live Deployment">
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
           </div>
         )}
         
@@ -138,9 +149,18 @@ const StudentKanban = () => {
             <span className="text-emerald-600 font-bold flex items-center gap-1">
               <CheckCircle className="w-4 h-4" /> Approved
             </span>
-            <a href={task.submissionUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-600 transition-colors">
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            <div className="flex gap-2">
+              {task.githubUrl && (
+                <a href={task.githubUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-slate-800 transition-colors" title="GitHub Repository">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                </a>
+              )}
+              {task.submissionUrl && (
+                <a href={task.submissionUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-600 transition-colors" title="Live Deployment">
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -229,18 +249,31 @@ const StudentKanban = () => {
                 <p className="font-semibold text-slate-800">{submitModal.taskTitle}</p>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Project URL (GitHub / Live Link)
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={submitModal.url}
-                  onChange={(e) => setSubmitModal({ ...submitModal, url: e.target.value })}
-                  placeholder="https://github.com/..."
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 transition-colors"
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Deployed Link (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={submitModal.submissionUrl}
+                    onChange={(e) => setSubmitModal({ ...submitModal, submissionUrl: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    GitHub URL (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={submitModal.githubUrl}
+                    onChange={(e) => setSubmitModal({ ...submitModal, githubUrl: e.target.value })}
+                    placeholder="https://github.com/..."
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 transition-colors"
+                  />
+                </div>
               </div>
 
               {submitStatus === 'error' && (
@@ -258,7 +291,7 @@ const StudentKanban = () => {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitStatus === 'submitting' || submitStatus === 'success' || !submitModal.url}
+                  disabled={submitStatus === 'submitting' || submitStatus === 'success' || (!submitModal.submissionUrl && !submitModal.githubUrl)}
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-md disabled:opacity-70 flex justify-center items-center"
                 >
                   {submitStatus === 'submitting' ? 'Submitting...' : 'Submit Project'}

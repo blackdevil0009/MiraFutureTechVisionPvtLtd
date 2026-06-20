@@ -11,7 +11,7 @@ const InternshipList = ({ onApply }) => {
   useEffect(() => {
     const fetchDomains = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/domains');
+        const res = await axios.get('https://api.mirafuturetechvision.com/api/domains');
         // Parse skills and features if they come as strings
         const parsedData = res.data.map(d => ({
           ...d,
