@@ -233,6 +233,36 @@ app.put('/api/admin/internships/:id/approve', authenticateToken, async (req, res
   }
 });
 
+// Admin: Edit Intern Details
+app.put('/api/admin/internships/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    
+    const {
+      full_name, email, phone, college_name, degree, branch,
+      year, duration, domain, skills, resume_link, payment_status
+    } = req.body;
+
+    const query = `
+      UPDATE internships 
+      SET full_name = ?, email = ?, phone = ?, college_name = ?, degree = ?, branch = ?,
+          year = ?, duration = ?, domain = ?, skills = ?, resume_link = ?, payment_status = ?
+      WHERE id = ?
+    `;
+
+    await pool.query(query, [
+      full_name, email, phone, college_name, degree, branch,
+      year, duration, domain, skills, resume_link, payment_status,
+      req.params.id
+    ]);
+
+    res.json({ message: 'Intern details updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update intern details' });
+  }
+});
+
 // Update internship payment status
 app.post('/api/internships/payment-update', async (req, res) => {
   try {
