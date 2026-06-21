@@ -32,7 +32,10 @@ const StudentProfile = () => {
         try {
           parsedSkills = typeof res.data.skills === 'string' ? JSON.parse(res.data.skills) : res.data.skills;
         } catch (e) {
-          parsedSkills = [];
+          // If JSON.parse fails, it might be a comma-separated string from the registration form
+          parsedSkills = typeof res.data.skills === 'string' 
+            ? res.data.skills.split(',').map(s => s.trim()).filter(Boolean) 
+            : [];
         }
       }
 
