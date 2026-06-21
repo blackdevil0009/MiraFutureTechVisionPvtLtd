@@ -159,6 +159,9 @@ app.post('/api/contact', async (req, res) => {
 
 app.get('/api/users/me', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'admin') {
+      return res.json({ id: 'admin', name: 'Administrator', role: 'admin' });
+    }
     const [users] = await pool.query('SELECT id, name, email, created_at FROM users WHERE id = ?', [req.user.id]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(users[0]);
