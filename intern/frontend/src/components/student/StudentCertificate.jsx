@@ -1,150 +1,175 @@
-import { API_URL } from '../../config';
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Award, Download, CheckCircle, Clock } from 'lucide-react';
+import { Award, Download, CheckCircle, Clock, ShieldCheck, FileText, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { API_URL } from '../../config';
 
 const StudentCertificate = ({ student }) => {
   const [certData, setCertData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchCertificate = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('studentToken');
+      const res = await axios.get(`${API_URL}/api/student/certificate`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCertData(res.data);
+    } catch (error) {
+      console.error("Error fetching certificate", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchCertificate = async () => {
-      try {
-        const token = localStorage.getItem('studentToken');
-        const res = await axios.get(`${API_URL}/api/student/certificate`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setCertData(res.data);
-      } catch (error) {
-        console.error("Error fetching certificate", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchCertificate();
   }, []);
 
-  if (loading) return <div className="text-center p-10">Loading certificate data...</div>;
+  const handleDownload = async (fileType) => {
+    try {
+      const token = localStorage.getItem('studentToken');
+      const response = await axios.get(`${API_URL}/api/student/certificate/download/${fileType}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
 
-  const isEligible = certData && certData.status === 'Generated';
+      const blob = new Blob([response.data]);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `Certificate-${fileType.toUpperCase()}.${fileType === 'png' ? 'png' : 'pdf'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      if (err.response && err.response.status === 403) {
+        alert(err.response.data?.error || 'Access Denied: You do not meet attendance criteria or Admin permission is required.');
+      } else {
+        alert('Failed to download certificate file. Please contact Admin.');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 text-slate-500 gap-3">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="font-semibold text-sm">Loading your completion certificate details...</p>
+      </div>
+    );
+  }
+
+  const isEligible = certData?.is_unlocked === true || certData?.status === 'Unlocked' || Boolean(certData?.pdf_url) || Boolean(certData?.png_url);
+  const hasPdf = certData?.pdf_url;
+  const hasPng = certData?.png_url;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">Completion Certificate</h3>
-            <p className="text-slate-500">Track your internship completion status and download your official certificate.</p>
+    <div className="max-w-5xl mx-auto space-y-8 p-4">
+      {/* Top Banner Card */}
+      <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> Official Internship Certificate
+            </span>
           </div>
-          <div className={`p-4 rounded-full ${isEligible ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-            <Award className={`w-8 h-8 ${isEligible ? 'text-emerald-600' : 'text-amber-600'}`} />
-          </div>
-        </div>
-
-        <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 mb-8">
-          <h4 className="font-semibold text-slate-800 mb-4">Eligibility Requirements</h4>
-          <ul className="space-y-3">
-            <li className="flex items-center gap-3 text-sm text-slate-600">
-              <CheckCircle className="w-5 h-5 text-emerald-500" />
-              Complete all assigned projects
-            </li>
-            <li className="flex items-center gap-3 text-sm text-slate-600">
-              <CheckCircle className="w-5 h-5 text-emerald-500" />
-              Maintain 85% attendance
-            </li>
-            <li className="flex items-center gap-3 text-sm text-slate-600">
-              <CheckCircle className="w-5 h-5 text-emerald-500" />
-              Complete internship duration
-            </li>
-            <li className="flex items-center gap-3 text-sm text-slate-600">
-              {isEligible ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <Clock className="w-5 h-5 text-amber-500" />}
-              Admin Approval
-            </li>
-          </ul>
-        </div>
-
-        <div className="flex flex-col md:flex-row items-center justify-between p-6 rounded-xl border-2 border-dashed border-slate-200 bg-white gap-4">
-          <div>
-            <h4 className="font-bold text-slate-800">Your Certificate</h4>
-            <p className="text-sm text-slate-500 mt-1">
-              {isEligible ? 'Your certificate is ready to download.' : 'Your certificate is currently being processed by the Admin.'}
-            </p>
-          </div>
-          <a
-            href={isEligible && certData.pdf_url ? `${API_URL}${certData.pdf_url}` : '#'}
-            target={isEligible && certData.pdf_url ? "_blank" : "_self"}
-            rel="noreferrer"
-            className={`flex w-full md:w-auto items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${
-              isEligible
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 active:scale-95'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'
-            }`}
-          >
-            <Download className="w-5 h-5" />
-            Download PDF
-          </a>
-        </div>
-      </div>
-
-      {/* Certificate Preview UI */}
-      <div className={`relative bg-white p-8 md:p-16 rounded-lg shadow-xl overflow-hidden border border-slate-200 ${!isEligible ? 'opacity-50 grayscale' : ''}`}>
-        <div className="absolute top-0 left-0 w-full h-4 bg-amber-500"></div>
-        <div className="absolute top-0 left-0 w-4 h-full bg-amber-500"></div>
-        <div className="absolute top-4 left-4 w-full h-full border-2 border-amber-200 rounded-sm pointer-events-none"></div>
-        
-        <div className="relative z-10 text-center">
-          <div className="w-24 h-24 mx-auto bg-amber-50 rounded-full flex items-center justify-center mb-6">
-            <Award className="w-12 h-12 text-amber-500" />
-          </div>
-          <div className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-2">
-            Mira Future Tech Pvt Ltd
-          </div>
-          
-          <h1 className="text-4xl md:text-6xl font-serif font-bold text-slate-800 mb-10 text-amber-600">
-            Certificate of Internship
-          </h1>
-          
-          <p className="text-lg text-slate-600 mb-4 font-serif italic">This is proudly presented to</p>
-          
-          <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6 border-b-2 border-slate-300 pb-2 inline-block px-10">
-            {student?.name || 'Student Name'}
+          <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Completion Certificate
           </h2>
-          
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed mb-16 font-serif">
-            For successfully completing the rigorous requirements and practical implementation in the field of <strong className="text-slate-800">{student?.domain || 'Software Engineering'}</strong>. Their dedication, technical prowess, and innovative problem-solving skills have been an invaluable asset during their tenure.
+          <p className="text-slate-500 text-sm mt-1">
+            {isEligible
+              ? 'Your official certificate has been issued by the Admin. Preview and download below.'
+              : `Complete your mandatory attendance (${certData?.threshold || 85}%) & requirements to unlock your certificate.`}
           </p>
-          
-          <div className="flex justify-between items-end max-w-3xl mx-auto px-4">
-            <div className="text-center">
-              <div className="w-32 border-b border-slate-400 mb-2 h-10 flex items-end justify-center pb-1">
-                <span className="text-slate-700 font-medium">{certData?.issue_date ? new Date(certData.issue_date).toLocaleDateString() : '--/--/----'}</span>
-              </div>
-              <p className="font-bold text-slate-800 uppercase text-xs tracking-wider">Date Issued</p>
+        </div>
+
+        {/* Download Action Buttons */}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {isEligible ? (
+            <>
+              {hasPdf && (
+                <button
+                  onClick={() => handleDownload('pdf')}
+                  className="flex-1 md:flex-initial px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" /> Download PDF
+                </button>
+              )}
+
+              {hasPng && (
+                <button
+                  onClick={() => handleDownload('png')}
+                  className="flex-1 md:flex-initial px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <ImageIcon className="w-4 h-4" /> Download PNG
+                </button>
+              )}
+
+              {!hasPdf && !hasPng && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Certificate Unlocked (Admin file upload pending)</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Locked (Requires {certData?.threshold || 85}% Attendance / Admin Unlock)</span>
             </div>
-            
-            <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center border-4 border-amber-200 opacity-80 mix-blend-multiply">
-              <span className="text-amber-700 font-bold text-xs tracking-widest uppercase">Verified</span>
+          )}
+        </div>
+      </div>
+
+      {/* CERTIFICATE FILE PREVIEW CONTAINER */}
+      {!isEligible ? (
+        <div className="bg-slate-50 rounded-2xl p-12 text-center border-2 border-dashed border-slate-200 space-y-4">
+          <div className="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
+            <Clock className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800">Certificate Currently Locked</h3>
+          <p className="text-slate-500 max-w-md mx-auto text-sm">
+            Your attendance is currently at <strong>{certData?.attendance_percentage || 0}%</strong> (Required: <strong>{certData?.threshold || 85}%</strong>).
+            Once you meet the threshold or receive Admin authorization, your official PDF/PNG certificate uploaded by the Admin will appear here.
+          </p>
+        </div>
+      ) : hasPng ? (
+        <div className="space-y-8">
+          {/* Render PNG Certificate Image if Uploaded by Admin */}
+          <div className="bg-white rounded-2xl p-6 shadow-md border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-emerald-600" /> Certificate Image (PNG)
+              </h3>
+              <button
+                onClick={() => handleDownload('png')}
+                className="px-4 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> Save PNG File
+              </button>
             </div>
-            
-            <div className="text-center">
-              <div className="w-32 border-b border-slate-400 mb-2 h-10 flex items-end justify-center">
-                <span className="font-serif italic text-2xl -mb-2 text-slate-700">Director</span>
-              </div>
-              <p className="font-bold text-slate-800 uppercase text-xs tracking-wider">Authorized Signatory</p>
+
+            <div className="flex justify-center bg-slate-900/5 p-4 rounded-xl overflow-hidden">
+              <img
+                src={`${API_URL}${hasPng}`}
+                alt="Official Completion Certificate"
+                className="max-w-full h-auto max-h-[750px] object-contain rounded-lg shadow-xl border border-slate-200"
+              />
             </div>
           </div>
         </div>
-
-        {!isEligible && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-20">
-            <div className="bg-white px-8 py-4 rounded-full shadow-lg border border-amber-200 flex items-center gap-3">
-              <Clock className="text-amber-500 w-6 h-6" />
-              <span className="font-bold text-slate-800">Certificate Locked</span>
-            </div>
+      ) : (
+        <div className="bg-emerald-50 rounded-2xl p-12 text-center border border-emerald-200 space-y-4">
+          <div className="w-16 h-16 mx-auto bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
+            <CheckCircle className="w-8 h-8" />
           </div>
-        )}
-      </div>
+          <h3 className="text-xl font-bold text-emerald-900">Certificate Unlocked!</h3>
+          <p className="text-emerald-700 max-w-md mx-auto text-sm">
+            Your certificate status is approved. The Admin is currently processing and uploading your official PDF & PNG certificate files. Please check back shortly!
+          </p>
+        </div>
+      )}
     </div>
   );
 };

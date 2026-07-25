@@ -1764,7 +1764,7 @@ app.delete('/api/admin/intern-submissions/:id', authenticateToken, async (req, r
   }
 });
 
-// Admin: Get all intern attendance
+// Admin: Get all intern attendance (Daily Logs)
 app.get('/api/admin/intern-attendance', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
@@ -1780,6 +1780,140 @@ app.get('/api/admin/intern-attendance', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin: Get Intern Attendance Summary & Certificate Unlocking Data
+app.get('/api/admin/intern-attendance/summary', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+
+    // Fetch interns with attendance stats
+    const [interns] = await pool.query(`
+      SELECT i.id, i.full_name as intern_name, i.email, i.phone, i.college_name, i.domain, 
+             COALESCE(i.present_days, 0) as present_days, 
+             COALESCE(i.total_days, 30) as total_days, 
+             COALESCE(i.certificate_override, 'Auto') as certificate_override,
+             (SELECT COUNT(*) FROM intern_attendance a WHERE a.intern_id = i.id AND a.status = 'Present') as logged_present_count
+      FROM internships i
+      ORDER BY i.created_at DESC
+    `);
+
+    // Fetch global mandatory attendance threshold setting
+    const [settings] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'mandatory_attendance_threshold'");
+    const threshold = parseInt(settings[0]?.setting_value || '85', 10);
+
+    const formatted = interns.map(intern => {
+      const actualPresent = Math.max(intern.present_days, intern.logged_present_count);
+      const totalDays = intern.total_days || 30;
+      const attendancePct = totalDays > 0 ? parseFloat(((actualPresent / totalDays) * 100).toFixed(2)) : 0;
+      
+      let isUnlocked = false;
+      let unlockReason = '';
+
+      if (intern.certificate_override === 'Unlocked') {
+        isUnlocked = true;
+        unlockReason = 'Unlocked by Admin';
+      } else if (intern.certificate_override === 'Locked') {
+        isUnlocked = false;
+        unlockReason = 'Locked by Admin';
+      } else {
+        isUnlocked = attendancePct >= threshold;
+        unlockReason = isUnlocked ? `Threshold Met (${attendancePct}% >= ${threshold}%)` : `Below Threshold (${attendancePct}% < ${threshold}%)`;
+      }
+
+      return {
+        ...intern,
+        present_days: actualPresent,
+        total_days: totalDays,
+        attendance_percentage: attendancePct,
+        is_certificate_unlocked: isUnlocked,
+        unlock_reason: unlockReason
+      };
+    });
+
+    res.json({ threshold, interns: formatted });
+  } catch (error) {
+    console.error('Error fetching intern attendance summary:', error);
+    res.status(500).json({ error: 'Failed to fetch attendance summary' });
+  }
+});
+
+// Admin: Update Intern Attendance & Certificate Override
+app.put('/api/admin/intern-attendance/:intern_id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { present_days, total_days, certificate_override } = req.body;
+    
+    await pool.query(
+      `UPDATE internships 
+       SET present_days = COALESCE(?, present_days), 
+           total_days = COALESCE(?, total_days), 
+           certificate_override = COALESCE(?, certificate_override) 
+       WHERE id = ?`,
+      [present_days !== undefined ? parseInt(present_days, 10) : null, 
+       total_days !== undefined ? parseInt(total_days, 10) : null, 
+       certificate_override || null, 
+       req.params.intern_id]
+    );
+
+    // Calculate updated attendance percentage to check if threshold is fulfilled
+    const [interns] = await pool.query(
+      `SELECT i.*, 
+              (SELECT COUNT(*) FROM intern_attendance a WHERE a.intern_id = i.id AND a.status = 'Present') as logged_present_count
+       FROM internships i WHERE i.id = ?`,
+      [req.params.intern_id]
+    );
+    const intern = interns[0];
+
+    const [settings] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'mandatory_attendance_threshold'");
+    const threshold = parseInt(settings[0]?.setting_value || '85', 10);
+
+    const actualPresent = Math.max(intern?.present_days || 0, intern?.logged_present_count || 0);
+    const totDays = intern?.total_days || 30;
+    const pct = totDays > 0 ? parseFloat(((actualPresent / totDays) * 100).toFixed(2)) : 0;
+
+    // If attendance requirement fulfilled or Admin force unlocked, set certificate_override = 'Unlocked'
+    if (pct >= threshold || certificate_override === 'Unlocked') {
+      await pool.query("UPDATE internships SET certificate_override = 'Unlocked' WHERE id = ?", [req.params.intern_id]);
+    }
+
+    res.json({ message: 'Intern attendance & certificate status updated successfully', attendance_percentage: pct });
+  } catch (error) {
+    console.error('Error updating intern attendance:', error);
+    res.status(500).json({ error: 'Failed to update intern attendance' });
+  }
+});
+
+// Admin: Get / Update Attendance Settings
+app.get('/api/admin/attendance-settings', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [settings] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'mandatory_attendance_threshold'");
+    const threshold = parseInt(settings[0]?.setting_value || '85', 10);
+    res.json({ mandatory_attendance_threshold: threshold });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch attendance settings' });
+  }
+});
+
+app.put('/api/admin/attendance-settings', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { mandatory_attendance_threshold } = req.body;
+    if (mandatory_attendance_threshold === undefined) {
+      return res.status(400).json({ error: 'mandatory_attendance_threshold is required' });
+    }
+
+    await pool.query(
+      "INSERT INTO system_settings (setting_key, setting_value) VALUES ('mandatory_attendance_threshold', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+      [mandatory_attendance_threshold.toString(), mandatory_attendance_threshold.toString()]
+    );
+
+    res.json({ message: 'Mandatory attendance threshold updated successfully' });
+  } catch (error) {
+    console.error('Error updating attendance settings:', error);
+    res.status(500).json({ error: 'Failed to update attendance settings' });
+  }
+});
+
 // Admin: Get all certificates
 app.get('/api/admin/intern-certificates', authenticateToken, async (req, res) => {
   try {
@@ -1788,7 +1922,7 @@ app.get('/api/admin/intern-certificates', authenticateToken, async (req, res) =>
     // Fetch all registered interns and their certificate status
     const [rows] = await pool.query(`
       SELECT i.id as intern_id, i.full_name as intern_name, i.domain,
-             c.id as cert_id, c.status as cert_status, c.issue_date, c.pdf_url
+             c.id as cert_id, c.status as cert_status, c.issue_date, c.pdf_url, c.png_url
       FROM internships i
       LEFT JOIN intern_certificates c ON i.id = c.intern_id
       ORDER BY i.created_at DESC
@@ -1821,38 +1955,81 @@ app.post('/api/admin/intern-certificates/generate', authenticateToken, async (re
   }
 });
 
-// Admin: Manually Upload Certificate for a specific intern
-app.post('/api/admin/intern-certificates/upload', authenticateToken, upload.single('certificate_file'), async (req, res) => {
+// Admin: Manually Upload Certificate (PDF / PNG) for a specific intern
+app.post('/api/admin/intern-certificates/upload', authenticateToken, (req, res, next) => {
+  upload.fields([
+    { name: 'certificate_file', maxCount: 1 },
+    { name: 'pdf_file', maxCount: 1 },
+    { name: 'png_file', maxCount: 1 }
+  ])(req, res, function (err) {
+    if (err) {
+      console.error('Multer file upload error:', err);
+      return res.status(500).json({ error: err.message || 'File upload error' });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
     const { intern_id } = req.body;
-    const pdf_url = req.file ? `/uploads/${req.file.filename}` : null;
     
-    if (!pdf_url || !intern_id) {
-      return res.status(400).json({ error: 'File and intern ID are required' });
+    if (!intern_id) {
+      return res.status(400).json({ error: 'Intern ID is required' });
+    }
+
+    let pdf_url = null;
+    let png_url = null;
+
+    if (req.files) {
+      if (req.files['certificate_file'] && req.files['certificate_file'][0]) {
+        const file = req.files['certificate_file'][0];
+        const fileUrl = `/uploads/${file.filename}`;
+        if (file.mimetype.includes('image') || file.originalname.match(/\.(png|jpg|jpeg|webp)$/i)) {
+          png_url = fileUrl;
+        } else {
+          pdf_url = fileUrl;
+        }
+      }
+      if (req.files['pdf_file'] && req.files['pdf_file'][0]) {
+        pdf_url = `/uploads/${req.files['pdf_file'][0].filename}`;
+      }
+      if (req.files['png_file'] && req.files['png_file'][0]) {
+        png_url = `/uploads/${req.files['png_file'][0].filename}`;
+      }
+    }
+
+    if (!pdf_url && !png_url) {
+      return res.status(400).json({ error: 'Please upload at least one PDF or PNG/Image certificate file.' });
     }
 
     const today = new Date().toISOString().split('T')[0];
-    
-    // Check if certificate record exists
-    const [existing] = await pool.query("SELECT id FROM intern_certificates WHERE intern_id = ?", [intern_id]);
-    
+
+    // Ensure table has png_url column
+    try { await pool.query('ALTER TABLE intern_certificates ADD COLUMN png_url VARCHAR(500)'); } catch(e) {}
+
+    const [existing] = await pool.query("SELECT id, pdf_url, png_url FROM intern_certificates WHERE intern_id = ?", [intern_id]);
+
     if (existing.length > 0) {
+      const finalPdf = pdf_url || existing[0].pdf_url;
+      const finalPng = png_url || existing[0].png_url;
       await pool.query(
-        "UPDATE intern_certificates SET pdf_url = ?, status = 'Generated', issue_date = ? WHERE intern_id = ?",
-        [pdf_url, today, intern_id]
+        "UPDATE intern_certificates SET pdf_url = ?, png_url = ?, status = 'Generated', issue_date = ? WHERE intern_id = ?",
+        [finalPdf, finalPng, today, intern_id]
       );
     } else {
       await pool.query(
-        "INSERT INTO intern_certificates (intern_id, issue_date, status, pdf_url) VALUES (?, ?, 'Generated', ?)",
-        [intern_id, today, pdf_url]
+        "INSERT INTO intern_certificates (intern_id, issue_date, status, pdf_url, png_url) VALUES (?, ?, 'Generated', ?, ?)",
+        [intern_id, today, pdf_url, png_url]
       );
     }
-    
-    res.json({ message: 'Certificate uploaded successfully' });
+
+    // Automatically set certificate_override to 'Unlocked' so student can access uploaded certificate
+    await pool.query("UPDATE internships SET certificate_override = 'Unlocked' WHERE id = ?", [intern_id]);
+
+    res.json({ message: 'Certificate files uploaded successfully', pdf_url, png_url });
   } catch (error) {
     console.error('Error uploading certificate:', error);
-    res.status(500).json({ error: 'Failed to upload certificate' });
+    res.status(500).json({ error: error.message || 'Failed to upload certificate files' });
   }
 });
 
@@ -2039,18 +2216,145 @@ app.post('/api/student/attendance/checkout', authenticateToken, async (req, res)
   }
 });
 
-// Student: Get Certificate
+// Student: Get Certificate with strict security enforcement
 app.get('/api/student/certificate', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
-    const [rows] = await pool.query('SELECT * FROM intern_certificates WHERE intern_id = ?', [req.user.id]);
-    
-    if (rows.length === 0) {
-      return res.json({ status: 'Pending', pdf_url: null });
+
+    // Fetch intern details
+    const [interns] = await pool.query(
+      `SELECT i.*, 
+              (SELECT COUNT(*) FROM intern_attendance a WHERE a.intern_id = i.id AND a.status = 'Present') as logged_present_count
+       FROM internships i WHERE i.id = ?`,
+      [req.user.id]
+    );
+
+    if (interns.length === 0) return res.status(404).json({ error: 'Intern record not found' });
+    const intern = interns[0];
+
+    // Fetch global threshold
+    const [settings] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'mandatory_attendance_threshold'");
+    const threshold = parseInt(settings[0]?.setting_value || '85', 10);
+
+    const actualPresent = Math.max(intern.present_days || 0, intern.logged_present_count || 0);
+    const totalDays = intern.total_days || 30;
+    const attendancePct = totalDays > 0 ? parseFloat(((actualPresent / totalDays) * 100).toFixed(2)) : 0;
+
+    // Fetch existing certificate record if generated
+    const [certRows] = await pool.query('SELECT * FROM intern_certificates WHERE intern_id = ?', [req.user.id]);
+    const cert = certRows[0] || null;
+
+    let isUnlocked = false;
+    if (intern.certificate_override === 'Unlocked') {
+      isUnlocked = true;
+    } else if (intern.certificate_override === 'Locked') {
+      isUnlocked = false;
+    } else {
+      const hasUploadedCert = cert && (cert.pdf_url || cert.png_url || cert.status === 'Generated' || cert.status === 'Unlocked');
+      isUnlocked = (attendancePct >= threshold) || Boolean(hasUploadedCert);
     }
-    res.json(rows[0]);
+
+    // Format dates (DD/MM/YYYY)
+    const formatDate = (dateObj) => {
+      const d = new Date(dateObj);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const startDate = intern.created_at ? new Date(intern.created_at) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + (totalDays || 30));
+
+    // SECURITY RULE: Hide certificate URLs if not unlocked by Attendance or Admin Override
+    res.json({
+      id: cert?.id || intern.id,
+      intern_id: intern.id,
+      full_name: intern.full_name,
+      email: intern.email,
+      domain: intern.domain || 'Software Engineering',
+      duration: intern.duration || `${totalDays} Days`,
+      start_date_formatted: formatDate(startDate),
+      end_date_formatted: formatDate(endDate),
+      issue_date_formatted: formatDate(cert?.issue_date || endDate),
+      status: isUnlocked ? (cert?.status || 'Unlocked') : 'Locked',
+      is_unlocked: isUnlocked,
+      pdf_url: isUnlocked ? (cert?.pdf_url || null) : null,
+      png_url: isUnlocked ? (cert?.png_url || null) : null,
+      attendance_percentage: attendancePct,
+      threshold: threshold,
+      certificate_code: `MIRA-CERT-${intern.id}-${startDate.getFullYear()}`
+    });
   } catch (error) {
+    console.error('Error fetching student certificate:', error);
     res.status(500).json({ error: 'Failed to fetch certificate' });
+  }
+});
+
+// Student: Protected Secure Certificate Download API
+app.get('/api/student/certificate/download/:fileType', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const { fileType } = req.params; // 'pdf' or 'png'
+
+    // Fetch intern & attendance details
+    const [interns] = await pool.query(
+      `SELECT i.*, 
+              (SELECT COUNT(*) FROM intern_attendance a WHERE a.intern_id = i.id AND a.status = 'Present') as logged_present_count
+       FROM internships i WHERE i.id = ?`,
+      [req.user.id]
+    );
+
+    if (interns.length === 0) return res.status(404).json({ error: 'Intern record not found' });
+    const intern = interns[0];
+
+    // Fetch global threshold
+    const [settings] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'mandatory_attendance_threshold'");
+    const threshold = parseInt(settings[0]?.setting_value || '85', 10);
+
+    const actualPresent = Math.max(intern.present_days || 0, intern.logged_present_count || 0);
+    const totalDays = intern.total_days || 30;
+    const attendancePct = totalDays > 0 ? parseFloat(((actualPresent / totalDays) * 100).toFixed(2)) : 0;
+
+    let isUnlocked = false;
+    if (intern.certificate_override === 'Unlocked') {
+      isUnlocked = true;
+    } else if (intern.certificate_override === 'Locked') {
+      isUnlocked = false;
+    } else {
+      isUnlocked = attendancePct >= threshold;
+    }
+
+    // STRICT ATTENDANCE & ADMIN PERMISSION CHECK
+    if (!isUnlocked) {
+      return res.status(403).json({
+        error: `Access Denied: Certificate is locked. Your attendance is ${attendancePct}% (Required: ${threshold}%) or Admin permission is required.`
+      });
+    }
+
+    // Fetch certificate record
+    const [certRows] = await pool.query('SELECT * FROM intern_certificates WHERE intern_id = ?', [req.user.id]);
+    if (certRows.length === 0) {
+      return res.status(404).json({ error: 'No certificate file has been uploaded by the Admin yet.' });
+    }
+
+    const cert = certRows[0];
+    const relativeUrl = fileType === 'png' ? cert.png_url : cert.pdf_url;
+
+    if (!relativeUrl) {
+      return res.status(404).json({ error: `No ${fileType.toUpperCase()} certificate file uploaded by the Admin.` });
+    }
+
+    const absolutePath = path.join(__dirname, relativeUrl);
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: 'Certificate file not found on server.' });
+    }
+
+    res.download(absolutePath);
+  } catch (error) {
+    console.error('Error downloading certificate file:', error);
+    res.status(500).json({ error: 'Failed to download certificate file' });
   }
 });
 

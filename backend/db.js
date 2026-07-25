@@ -138,6 +138,24 @@ const initDb = async () => {
     try { await pool.query('ALTER TABLE internships ADD COLUMN otp VARCHAR(10) DEFAULT NULL'); } catch (e) {}
     try { await pool.query('ALTER TABLE internships ADD COLUMN otp_expiry DATETIME DEFAULT NULL'); } catch (e) {}
 
+    // Add attendance and certificate fields to internships table
+    try { await pool.query('ALTER TABLE internships ADD COLUMN present_days INT DEFAULT 0'); } catch (e) {}
+    try { await pool.query('ALTER TABLE internships ADD COLUMN total_days INT DEFAULT 30'); } catch (e) {}
+    try { await pool.query("ALTER TABLE internships ADD COLUMN certificate_override VARCHAR(50) DEFAULT 'Auto'"); } catch (e) {}
+
+    // System Settings Table for global config
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await pool.query("INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('mandatory_attendance_threshold', '85')");
+    } catch(e) {}
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS internship_domains (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -400,10 +418,13 @@ const initDb = async () => {
         issue_date DATE,
         status VARCHAR(50) DEFAULT 'Pending',
         pdf_url VARCHAR(500),
+        png_url VARCHAR(500),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (intern_id) REFERENCES internships(id) ON DELETE CASCADE
       )
     `);
+
+    try { await pool.query('ALTER TABLE intern_certificates ADD COLUMN png_url VARCHAR(500)'); } catch(e) {}
 
     // --- REWARDS & RESOURCES TABLES ---
     await pool.query(`
