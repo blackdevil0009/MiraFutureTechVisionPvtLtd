@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -54,7 +55,7 @@ const InternshipForm = ({ internship, onSuccess }) => {
   useEffect(() => {
     const fetchDomains = async () => {
       try {
-        const res = await axios.get('https://api.mirafuturetechvision.com/api/domains');
+        const res = await axios.get(`${API_URL}/api/domains`);
         const titles = res.data.map(d => d.title);
         setApiDomains(titles);
         if (formData.domain && !titles.includes(formData.domain) && formData.domain !== '') {
@@ -153,7 +154,7 @@ const InternshipForm = ({ internship, onSuccess }) => {
       };
 
       const response = await axios.post(
-        'https://api.mirafuturetechvision.com/api/internships/apply',
+        `${API_URL}/api/internships/apply`,
         payload,
         {
           headers: {

@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -14,7 +16,7 @@ const StudentDashboard = ({ student }) => {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('studentToken');
-        const res = await axios.get('https://api.mirafuturetechvision.com/api/student/dashboard-stats', {
+        const res = await axios.get(`${API_URL}/api/student/dashboard-stats`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setStats(res.data);

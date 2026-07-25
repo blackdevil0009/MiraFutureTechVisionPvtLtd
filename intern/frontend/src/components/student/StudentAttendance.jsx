@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Clock, CheckCircle } from 'lucide-react';
@@ -32,7 +34,7 @@ const StudentAttendance = ({ student }) => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/attendance', {
+      const res = await axios.get(`${API_URL}/api/student/attendance`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const records = res.data;
@@ -77,12 +79,12 @@ const StudentAttendance = ({ student }) => {
     try {
       const token = localStorage.getItem('studentToken');
       if (!isCheckedIn) {
-        await axios.post('https://api.mirafuturetechvision.com/api/student/attendance/checkin', {}, {
+        await axios.post(`${API_URL}/api/student/attendance/checkin`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
         if (timeLeft > 0) return; 
-        await axios.post('https://api.mirafuturetechvision.com/api/student/attendance/checkout', {}, {
+        await axios.post(`${API_URL}/api/student/attendance/checkout`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }

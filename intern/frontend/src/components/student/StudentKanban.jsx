@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { X, CheckCircle, ExternalLink } from 'lucide-react';
@@ -11,7 +13,7 @@ const StudentKanban = () => {
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/projects', {
+      const res = await axios.get(`${API_URL}/api/student/projects`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -61,7 +63,7 @@ const StudentKanban = () => {
     setSubmitStatus('submitting');
     try {
       const token = localStorage.getItem('studentToken');
-      await axios.post('https://api.mirafuturetechvision.com/api/student/submit-project', {
+      await axios.post(`${API_URL}/api/student/submit-project`, {
         project_id: submitModal.taskId,
         submission_url: submitModal.submissionUrl,
         github_url: submitModal.githubUrl

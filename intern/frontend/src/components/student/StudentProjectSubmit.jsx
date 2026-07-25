@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ExternalLink, CheckCircle, Plus, X, Download } from 'lucide-react';
@@ -11,7 +13,7 @@ const StudentProjectSubmit = () => {
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/projects', {
+      const res = await axios.get(`${API_URL}/api/student/projects`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProjects(res.data);
@@ -30,7 +32,7 @@ const StudentProjectSubmit = () => {
     setActionStatus({ id: projectId, status: 'loading' });
     try {
       const token = localStorage.getItem('studentToken');
-      await axios.post('https://api.mirafuturetechvision.com/api/student/select-project', { project_id: projectId }, {
+      await axios.post(`${API_URL}/api/student/select-project`, { project_id: projectId }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProjects(projects.map(p => p.id === projectId ? { ...p, is_selected: true, submission_status: 'Started' } : p));
@@ -50,8 +52,8 @@ const StudentProjectSubmit = () => {
   const getValidUrl = (url) => {
     if (!url) return '#';
     if (url.startsWith('http')) return url;
-    if (url.startsWith('/uploads')) return `https://api.mirafuturetechvision.com${url}`;
-    return `https://api.mirafuturetechvision.com/${url}`;
+    if (url.startsWith('/uploads')) return `${API_URL}${url}`;
+    return `${API_URL}/${url}`;
   };
 
   return (

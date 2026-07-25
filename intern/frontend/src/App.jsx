@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Header from './components/Header';
@@ -19,7 +20,7 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('studentToken');
     if (token) {
-      axios.get('https://api.mirafuturetechvision.com/api/student/me', {
+      axios.get(`${API_URL}/api/student/me`, {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => {
         setCurrentStudent(res.data);
@@ -49,7 +50,7 @@ function App() {
   const handleStudentLogin = async (basicStudentData) => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/me', {
+      const res = await axios.get(`${API_URL}/api/student/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCurrentStudent(res.data);

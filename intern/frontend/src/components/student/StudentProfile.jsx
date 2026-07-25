@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -23,7 +25,7 @@ const StudentProfile = () => {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('studentToken');
-      const res = await axios.get('https://api.mirafuturetechvision.com/api/student/profile', {
+      const res = await axios.get(`${API_URL}/api/student/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -54,7 +56,7 @@ const StudentProfile = () => {
     try {
       setSaveStatus('saving');
       const token = localStorage.getItem('studentToken');
-      await axios.put('https://api.mirafuturetechvision.com/api/student/profile', profile, {
+      await axios.put(`${API_URL}/api/student/profile`, profile, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSaveStatus('success');

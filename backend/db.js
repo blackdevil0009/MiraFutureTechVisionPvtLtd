@@ -46,10 +46,60 @@ const initDb = async () => {
         college_name VARCHAR(255) NOT NULL,
         referral_code VARCHAR(50) NOT NULL UNIQUE,
         referrals_count INT DEFAULT 0,
+        points INT DEFAULT 0,
+        instagram_url VARCHAR(255),
+        linkedin_url VARCHAR(255),
+        upi_id VARCHAR(255),
+        verification_status VARCHAR(50) DEFAULT 'Pending',
         status VARCHAR(50) DEFAULT 'Active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    try { await pool.query('ALTER TABLE campus_ambassadors ADD COLUMN points INT DEFAULT 0'); } catch(e) {}
+    try { await pool.query('ALTER TABLE campus_ambassadors ADD COLUMN instagram_url VARCHAR(255)'); } catch(e) {}
+    try { await pool.query('ALTER TABLE campus_ambassadors ADD COLUMN linkedin_url VARCHAR(255)'); } catch(e) {}
+    try { await pool.query('ALTER TABLE campus_ambassadors ADD COLUMN upi_id VARCHAR(255)'); } catch(e) {}
+    try { await pool.query("ALTER TABLE campus_ambassadors ADD COLUMN verification_status VARCHAR(50) DEFAULT 'Pending'"); } catch(e) {}
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS campus_challenges (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'General',
+        points INT DEFAULT 100,
+        description TEXT,
+        deadline VARCHAR(100),
+        reward_perk VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS campus_challenge_submissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ambassador_id INT NOT NULL,
+        challenge_id INT NOT NULL,
+        proof_url TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Insert initial default campus ambassador challenges if empty
+    const [existingChallenges] = await pool.query('SELECT COUNT(*) as count FROM campus_challenges');
+    if (existingChallenges[0]?.count === 0) {
+      await pool.query(`
+        INSERT INTO campus_challenges (title, category, points, description, deadline, reward_perk) VALUES
+        ('Solve 10 DSA Array & Tree Problems', 'DSA', 300, 'Solve 10 Data Structures & Algorithms problems on LeetCode / GeeksforGeeks and share your profile link as proof.', '2026-08-20', '300 PTS + DSA Master Certificate'),
+        ('Complete General Aptitude Quiz', 'Aptitude', 200, 'Test your logical reasoning and numerical aptitude. Achieve a score above 80% to earn challenge points.', '2026-08-10', '200 PTS + Aptitude Badge'),
+        ('Build & Deploy Full-Stack Mini Project', 'Mini Project', 500, 'Build a modern web app (e.g. Portfolio, Task Tracker, E-commerce) and deploy on Vercel/Netlify with GitHub source code.', '2026-08-25', '500 PTS + Featured Developer Badge'),
+        ('Host a College Tech Workshop', 'Event & Workshop', 500, 'Organize a tech awareness session or mini-workshop in your college about Mira Tech Internships.', '2026-08-15', '500 PTS + Official Event Banner'),
+        ('Reach 5 Campus Registrations', 'Campus Outreach', 300, 'Get 5 students from your college to enroll using your unique referral code.', '2026-08-01', '300 PTS + Bronze Badge'),
+        ('LinkedIn Tech Feature Post', 'Social Media', 150, 'Share our official Mira Future Tech Vision internship flyer on your LinkedIn profile tagging us.', '2026-07-31', '150 PTS + Official Repost')
+      `);
+    }
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -355,6 +405,45 @@ const initDb = async () => {
       )
     `);
 
+    // --- REWARDS & RESOURCES TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS student_rewards (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        points INT DEFAULT 100,
+        description TEXT,
+        type VARCHAR(50) DEFAULT 'Reward',
+        target_type VARCHAR(50) DEFAULT 'All',
+        target_value VARCHAR(255) DEFAULT 'All',
+        resource_url VARCHAR(500),
+        file_path VARCHAR(500),
+        image_icon VARCHAR(50) DEFAULT '🎁',
+        bg_gradient VARCHAR(100) DEFAULT 'from-purple-600 to-indigo-600',
+        in_stock BOOLEAN DEFAULT TRUE,
+        popular BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try { await pool.query('ALTER TABLE student_rewards ADD COLUMN target_type VARCHAR(50) DEFAULT "All"'); } catch(e) {}
+    try { await pool.query('ALTER TABLE student_rewards ADD COLUMN target_value VARCHAR(255) DEFAULT "All"'); } catch(e) {}
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS student_reward_claims (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        claim_code VARCHAR(50) NOT NULL UNIQUE,
+        student_email VARCHAR(255) NOT NULL,
+        reward_id INT NOT NULL,
+        reward_title VARCHAR(255) NOT NULL,
+        points_used INT NOT NULL,
+        address TEXT,
+        phone VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'Processing',
+        tracking_no VARCHAR(100) DEFAULT 'ORD-PENDING',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     console.log("Database initialized successfully");
   } catch (error) {

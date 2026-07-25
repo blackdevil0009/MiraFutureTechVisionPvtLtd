@@ -1,3 +1,5 @@
+import { API_URL } from '../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -8,7 +10,7 @@ const Benefits = () => {
   useEffect(() => {
     const fetchBenefits = async () => {
       try {
-        const res = await axios.get('https://api.mirafuturetechvision.com/api/benefits');
+        const res = await axios.get(`${API_URL}/api/benefits`);
         setBenefits(res.data);
       } catch (err) {
         console.error('Failed to fetch benefits', err);

@@ -1170,7 +1170,7 @@ app.post('/api/payment/verify', async (req, res) => {
 // Register Campus Ambassador
 app.post('/api/campus/register', async (req, res) => {
   try {
-    let { name, email, password, phone, college_name } = req.body;
+    let { name, email, password, phone, college_name, instagram_url, linkedin_url } = req.body;
     email = email.trim();
     
     // Validate domain
@@ -1188,9 +1188,17 @@ app.post('/api/campus/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Validate required social follow URLs
+    if (!instagram_url || !instagram_url.trim()) {
+      return res.status(400).json({ error: 'Instagram profile URL is required after following our company page.' });
+    }
+    if (!linkedin_url || !linkedin_url.trim()) {
+      return res.status(400).json({ error: 'LinkedIn profile URL is required after following our company page.' });
+    }
+
     await pool.query(
-      'INSERT INTO campus_ambassadors (name, email, password, phone, college_name, referral_code) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, phone, college_name, referral_code]
+      "INSERT INTO campus_ambassadors (name, email, password, phone, college_name, referral_code, instagram_url, linkedin_url, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')",
+      [name, email, hashedPassword, phone, college_name, referral_code, instagram_url.trim(), linkedin_url.trim()]
     );
 
     res.json({ message: 'Campus Ambassador registered successfully' });
@@ -1226,6 +1234,16 @@ app.post('/api/campus/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
+    // Check social follow verification status
+    if (ambassador.verification_status && ambassador.verification_status !== 'Verified') {
+      if (ambassador.verification_status === 'Rejected') {
+        console.log('[LOGIN FAILED] Verification rejected');
+        return res.status(403).json({ error: 'Your campus ambassador account verification was rejected.' });
+      }
+      console.log('[LOGIN FAILED] Verification pending');
+      return res.status(403).json({ error: 'Your account is pending social follow verification by admin. Please wait for admin approval before logging in.' });
+    }
+
     console.log('[LOGIN SUCCESS] Token generated');
 
     const token = jwt.sign({ id: ambassador.id, role: 'campus_ambassador' }, process.env.JWT_SECRET || 'secret123', { expiresIn: '24h' });
@@ -1236,9 +1254,16 @@ app.post('/api/campus/login', async (req, res) => {
         id: ambassador.id,
         name: ambassador.name,
         email: ambassador.email,
+        phone: ambassador.phone,
         college_name: ambassador.college_name,
         referral_code: ambassador.referral_code,
-        referrals_count: ambassador.referrals_count
+        referrals_count: ambassador.referrals_count || 0,
+        points: ambassador.points || 0,
+        instagram_url: ambassador.instagram_url || '',
+        linkedin_url: ambassador.linkedin_url || '',
+        upi_id: ambassador.upi_id || '',
+        verification_status: ambassador.verification_status || 'Pending',
+        status: ambassador.status
       }
     });
   } catch (error) {
@@ -1247,24 +1272,279 @@ app.post('/api/campus/login', async (req, res) => {
   }
 });
 
+// Get Campus Ambassador Dashboard (Stats, Referral History, Leaderboard)
+app.get('/api/campus/dashboard', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
+    
+    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, points, instagram_url, linkedin_url, upi_id, verification_status, status, created_at FROM campus_ambassadors WHERE id = ?', [req.user.id]);
+    if (ambassadors.length === 0) return res.status(404).json({ error: 'Ambassador profile not found' });
+    const ambassador = ambassadors[0];
+
+    // Fetch students registered with this referral code
+    const [referrals] = await pool.query('SELECT id, full_name, email, domain, created_at FROM internships WHERE referral_code = ? ORDER BY created_at DESC', [ambassador.referral_code]);
+
+    // Fetch top leaderboard ambassadors
+    const [leaderboard] = await pool.query('SELECT name, college_name, referrals_count, points FROM campus_ambassadors ORDER BY referrals_count DESC, points DESC LIMIT 5');
+
+    res.json({
+      ambassador,
+      referrals,
+      leaderboard
+    });
+  } catch (error) {
+    console.error('Error fetching CA dashboard:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+  }
+});
+
 // Get Campus Ambassador Profile
 app.get('/api/campus/profile', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
-    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, status, created_at FROM campus_ambassadors WHERE id = ?', [req.user.id]);
+    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, points, instagram_url, linkedin_url, upi_id, verification_status, status, created_at FROM campus_ambassadors WHERE id = ?', [req.user.id]);
     res.json(ambassadors[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
-// Get all Campus Ambassadors (Admin)
+// Update Campus Ambassador Profile
+app.put('/api/campus/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
+    const { phone, college_name, instagram_url, linkedin_url, upi_id } = req.body;
+
+    await pool.query(
+      'UPDATE campus_ambassadors SET phone = ?, college_name = ?, instagram_url = ?, linkedin_url = ?, upi_id = ? WHERE id = ?',
+      [phone, college_name, instagram_url, linkedin_url, upi_id, req.user.id]
+    );
+
+    const [updated] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, points, instagram_url, linkedin_url, upi_id, verification_status, status FROM campus_ambassadors WHERE id = ?', [req.user.id]);
+    res.json({ message: 'Profile updated successfully', user: updated[0] });
+  } catch (error) {
+    console.error('Error updating CA profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Get Campus Ambassador Challenges with submission status
+app.get('/api/campus/challenges', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
+    const ambassadorId = req.user.id;
+
+    const [challenges] = await pool.query(`
+      SELECT 
+        c.*, 
+        s.id as submission_id,
+        s.status as submission_status, 
+        s.proof_url, 
+        s.notes, 
+        s.created_at as submitted_at 
+      FROM campus_challenges c 
+      LEFT JOIN campus_challenge_submissions s 
+        ON c.id = s.challenge_id AND s.ambassador_id = ? 
+      ORDER BY c.created_at DESC`,
+      [ambassadorId]
+    );
+
+    res.json(challenges);
+  } catch (error) {
+    console.error('Error fetching CA challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch challenges' });
+  }
+});
+
+// Submit proof for Campus Ambassador Challenge
+app.post('/api/campus/challenges/submit', authenticateToken, upload.single('proof_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'campus_ambassador') return res.status(403).json({ error: 'Unauthorized' });
+    const { challenge_id, proof_url, notes } = req.body;
+
+    if (!challenge_id) {
+      return res.status(400).json({ error: 'Challenge ID is required' });
+    }
+
+    const finalProof = req.file ? `/uploads/${req.file.filename}` : (proof_url || '');
+
+    // Insert submission or update existing
+    const [existing] = await pool.query(
+      'SELECT id FROM campus_challenge_submissions WHERE ambassador_id = ? AND challenge_id = ?',
+      [req.user.id, challenge_id]
+    );
+
+    if (existing.length > 0) {
+      await pool.query(
+        'UPDATE campus_challenge_submissions SET proof_url = ?, notes = ?, status = "Pending" WHERE id = ?',
+        [finalProof, notes || '', existing[0].id]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO campus_challenge_submissions (ambassador_id, challenge_id, proof_url, notes, status) VALUES (?, ?, ?, ?, "Pending")',
+        [req.user.id, challenge_id, finalProof, notes || '']
+      );
+    }
+
+    res.json({ message: 'Challenge submission sent for verification successfully!' });
+  } catch (error) {
+    console.error('Error submitting challenge proof:', error);
+    res.status(500).json({ error: 'Failed to submit challenge proof' });
+  }
+});
+
+// Admin: Get all Campus Ambassadors
 app.get('/api/admin/campus-ambassadors', authenticateToken, async (req, res) => {
   try {
-    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, status, created_at FROM campus_ambassadors ORDER BY created_at DESC');
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [ambassadors] = await pool.query('SELECT id, name, email, phone, college_name, referral_code, referrals_count, points, instagram_url, linkedin_url, upi_id, verification_status, status, created_at FROM campus_ambassadors ORDER BY created_at DESC');
     res.json(ambassadors);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch campus ambassadors' });
+  }
+});
+
+// Admin: Update Campus Ambassador Social Follow Verification Status
+app.put('/api/admin/campus-ambassadors/:id/verification', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { verification_status } = req.body;
+    if (!verification_status) return res.status(400).json({ error: 'verification_status is required' });
+
+    await pool.query('UPDATE campus_ambassadors SET verification_status = ? WHERE id = ?', [verification_status, req.params.id]);
+    res.json({ message: `Verification status updated to ${verification_status}` });
+  } catch (error) {
+    console.error('Error updating CA verification status:', error);
+    res.status(500).json({ error: 'Failed to update verification status' });
+  }
+});
+
+// Admin: Update Campus Ambassador Social Follow Links
+app.put('/api/admin/campus-ambassadors/:id/social-links', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { instagram_url, linkedin_url } = req.body;
+
+    await pool.query('UPDATE campus_ambassadors SET instagram_url = ?, linkedin_url = ? WHERE id = ?', [instagram_url || '', linkedin_url || '', req.params.id]);
+    res.json({ message: 'Social links updated successfully' });
+  } catch (error) {
+    console.error('Error updating CA social links:', error);
+    res.status(500).json({ error: 'Failed to update social links' });
+  }
+});
+
+// Admin: Delete Campus Ambassador
+app.delete('/api/admin/campus-ambassadors/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    await pool.query('DELETE FROM campus_ambassadors WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Ambassador deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete ambassador' });
+  }
+});
+
+// Admin: Get all Campus Challenges
+app.get('/api/admin/campus/challenges', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM campus_challenges ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch challenges' });
+  }
+});
+
+// Admin: Create new Campus Challenge / Task
+app.post('/api/admin/campus/challenges', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { title, category, points, description, deadline, reward_perk } = req.body;
+
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    const [result] = await pool.query(
+      'INSERT INTO campus_challenges (title, category, points, description, deadline, reward_perk) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, category || 'General', parseInt(points, 10) || 100, description || '', deadline || '', reward_perk || '']
+    );
+
+    const [newItem] = await pool.query('SELECT * FROM campus_challenges WHERE id = ?', [result.insertId]);
+    res.json({ message: 'Challenge created successfully', challenge: newItem[0] });
+  } catch (error) {
+    console.error('Error creating challenge:', error);
+    res.status(500).json({ error: 'Failed to create challenge' });
+  }
+});
+
+// Admin: Delete Campus Challenge
+app.delete('/api/admin/campus/challenges/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    await pool.query('DELETE FROM campus_challenges WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Challenge deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete challenge' });
+  }
+});
+
+// Admin: Get all Campus Challenge Submissions
+app.get('/api/admin/campus/submissions', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query(`
+      SELECT 
+        s.id,
+        s.ambassador_id,
+        s.challenge_id,
+        s.proof_url,
+        s.notes,
+        s.status,
+        s.created_at,
+        a.name as ambassador_name,
+        a.email as ambassador_email,
+        a.college_name,
+        c.title as challenge_title,
+        c.points as challenge_points,
+        c.category as challenge_category
+      FROM campus_challenge_submissions s
+      JOIN campus_ambassadors a ON s.ambassador_id = a.id
+      JOIN campus_challenges c ON s.challenge_id = c.id
+      ORDER BY s.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
+
+// Admin: Approve or Reject Campus Challenge Submission
+app.put('/api/admin/campus/submissions/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { id } = req.params;
+    const { status } = req.body; // 'Approved' or 'Rejected'
+
+    const [submissions] = await pool.query('SELECT * FROM campus_challenge_submissions WHERE id = ?', [id]);
+    if (submissions.length === 0) return res.status(404).json({ error: 'Submission not found' });
+    
+    const sub = submissions[0];
+    const previousStatus = sub.status;
+
+    await pool.query('UPDATE campus_challenge_submissions SET status = ? WHERE id = ?', [status, id]);
+
+    // If newly approved, award challenge points to ambassador
+    if (status === 'Approved' && previousStatus !== 'Approved') {
+      const [challenges] = await pool.query('SELECT points FROM campus_challenges WHERE id = ?', [sub.challenge_id]);
+      const challengePoints = challenges[0]?.points || 100;
+
+      await pool.query('UPDATE campus_ambassadors SET points = points + ? WHERE id = ?', [challengePoints, sub.ambassador_id]);
+    }
+
+    res.json({ message: `Submission status updated to ${status}` });
+  } catch (error) {
+    console.error('Error updating CA submission status:', error);
+    res.status(500).json({ error: 'Failed to update status' });
   }
 });
 
@@ -1774,4 +2054,360 @@ app.get('/api/student/certificate', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// REWARDS & RESOURCES MANAGEMENT APIS
+// ==========================================
+
+// Admin: Get rewards target options (domains and students list)
+app.get('/api/admin/rewards-options', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    
+    const [domainRows] = await pool.query("SELECT DISTINCT domain FROM internships WHERE domain IS NOT NULL AND domain != ''");
+    const [hiringDomainRows] = await pool.query("SELECT DISTINCT title as domain FROM internship_domains WHERE title IS NOT NULL AND title != ''");
+    
+    const domainSet = new Set();
+    hiringDomainRows.forEach(r => {
+      if (r.domain && r.domain.trim()) domainSet.add(r.domain.trim());
+    });
+    domainRows.forEach(r => {
+      if (r.domain && r.domain.trim()) domainSet.add(r.domain.trim());
+    });
+
+    const [studentRows] = await pool.query("SELECT id, full_name, email, domain FROM internships ORDER BY full_name ASC");
+
+    res.json({
+      domains: Array.from(domainSet),
+      students: studentRows
+    });
+  } catch (error) {
+    console.error('Error fetching rewards options:', error);
+    res.status(500).json({ error: 'Failed to fetch options' });
+  }
+});
+
+// Admin: Get all rewards & resources
+app.get('/api/admin/rewards', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM student_rewards ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching admin rewards:', error);
+    res.status(500).json({ error: 'Failed to fetch rewards' });
+  }
+});
+
+// Admin: Create / Upload new reward or resource item
+app.post('/api/admin/rewards', authenticateToken, upload.single('reward_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    
+    const {
+      title,
+      category,
+      points,
+      description,
+      type,
+      target_type,
+      target_value,
+      resource_url,
+      image_icon,
+      bg_gradient,
+      in_stock,
+      popular
+    } = req.body;
+
+    if (!title || !category) {
+      return res.status(400).json({ error: 'Title and category are required' });
+    }
+
+    const file_path = req.file ? `/uploads/${req.file.filename}` : null;
+    const itemType = type || 'Reward';
+    const targetType = target_type || 'All';
+    const targetValue = target_value || 'All';
+    const itemPoints = parseInt(points, 10) || 0;
+    const itemInStock = in_stock === 'true' || in_stock === true || in_stock === '1' ? 1 : 1;
+    const itemPopular = popular === 'true' || popular === true || popular === '1' ? 1 : 0;
+    const icon = image_icon || '🎁';
+    const gradient = bg_gradient || 'from-purple-600 to-indigo-600';
+
+    const [result] = await pool.query(
+      `INSERT INTO student_rewards 
+       (title, category, points, description, type, target_type, target_value, resource_url, file_path, image_icon, bg_gradient, in_stock, popular)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [title, category, itemPoints, description || '', itemType, targetType, targetValue, resource_url || '', file_path, icon, gradient, itemInStock, itemPopular]
+    );
+
+    const [newItem] = await pool.query('SELECT * FROM student_rewards WHERE id = ?', [result.insertId]);
+    res.json({ message: 'Reward / Resource created successfully', reward: newItem[0] });
+  } catch (error) {
+    console.error('Error creating reward:', error);
+    res.status(500).json({ error: 'Failed to create reward' });
+  }
+});
+
+// Admin: Update existing reward or resource item
+app.put('/api/admin/rewards/:id', authenticateToken, upload.single('reward_file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { id } = req.params;
+    const {
+      title,
+      category,
+      points,
+      description,
+      type,
+      target_type,
+      target_value,
+      resource_url,
+      image_icon,
+      bg_gradient,
+      in_stock,
+      popular
+    } = req.body;
+
+    const [existing] = await pool.query('SELECT * FROM student_rewards WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Reward item not found' });
+    }
+
+    const file_path = req.file ? `/uploads/${req.file.filename}` : existing[0].file_path;
+    const itemPoints = points !== undefined ? parseInt(points, 10) : existing[0].points;
+
+    await pool.query(
+      `UPDATE student_rewards SET
+       title = ?, category = ?, points = ?, description = ?, type = ?, target_type = ?, target_value = ?, resource_url = ?, 
+       file_path = ?, image_icon = ?, bg_gradient = ?, in_stock = ?, popular = ?
+       WHERE id = ?`,
+      [
+        title || existing[0].title,
+        category || existing[0].category,
+        itemPoints,
+        description !== undefined ? description : existing[0].description,
+        type || existing[0].type,
+        target_type || existing[0].target_type,
+        target_value || existing[0].target_value,
+        resource_url !== undefined ? resource_url : existing[0].resource_url,
+        file_path,
+        image_icon || existing[0].image_icon,
+        bg_gradient || existing[0].bg_gradient,
+        in_stock !== undefined ? (in_stock ? 1 : 0) : existing[0].in_stock,
+        popular !== undefined ? (popular ? 1 : 0) : existing[0].popular,
+        id
+      ]
+    );
+
+    const [updatedItem] = await pool.query('SELECT * FROM student_rewards WHERE id = ?', [id]);
+    res.json({ message: 'Reward updated successfully', reward: updatedItem[0] });
+  } catch (error) {
+    console.error('Error updating reward:', error);
+    res.status(500).json({ error: 'Failed to update reward' });
+  }
+});
+
+// Admin: Delete a reward or resource item
+app.delete('/api/admin/rewards/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { id } = req.params;
+    await pool.query('DELETE FROM student_rewards WHERE id = ?', [id]);
+    res.json({ message: 'Reward deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting reward:', error);
+    res.status(500).json({ error: 'Failed to delete reward' });
+  }
+});
+
+// Admin: Get all student claim requests
+app.get('/api/admin/reward-claims', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.query('SELECT * FROM student_reward_claims ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching claims:', error);
+    res.status(500).json({ error: 'Failed to fetch claim requests' });
+  }
+});
+
+// Admin: Update claim request status or tracking code
+app.put('/api/admin/reward-claims/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const { id } = req.params;
+    const { status, tracking_no } = req.body;
+
+    await pool.query(
+      'UPDATE student_reward_claims SET status = ?, tracking_no = ? WHERE id = ?',
+      [status || 'Processing', tracking_no || 'ORD-PENDING', id]
+    );
+
+    res.json({ message: 'Claim status updated successfully' });
+  } catch (error) {
+    console.error('Error updating claim status:', error);
+    res.status(500).json({ error: 'Failed to update claim status' });
+  }
+});
+
+// Student: Get Gifts & Point Balance & Claim History
+app.get('/api/student/gifts', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const studentId = req.user.id;
+
+    // Calculate student points
+    const [attendanceRows] = await pool.query('SELECT COUNT(*) as count FROM intern_attendance WHERE intern_id = ?', [studentId]);
+    const [submissionRows] = await pool.query("SELECT COUNT(*) as count FROM intern_submissions WHERE intern_id = ? AND status = 'Approved'", [studentId]);
+
+    const attendanceDays = attendanceRows[0]?.count || 0;
+    const approvedProjects = submissionRows[0]?.count || 0;
+    const calculatedPoints = 500 + (attendanceDays * 20) + (approvedProjects * 100);
+
+    // Get student info for targeted filtering
+    const [studentInfo] = await pool.query('SELECT email, domain, full_name FROM internships WHERE id = ?', [studentId]);
+    const studentEmail = studentInfo[0]?.email || '';
+    const studentDomain = studentInfo[0]?.domain || '';
+    const studentName = studentInfo[0]?.full_name || '';
+
+    // Fetch active gifts from DB filtered by audience (All, Department, or Specific Student)
+    const [gifts] = await pool.query(
+      `SELECT * FROM student_rewards 
+       WHERE (type IN ('Reward', 'LOR', 'Certificates') OR points > 0)
+         AND (
+           target_type = 'All' 
+           OR target_value = 'All'
+           OR (target_type = 'Department' AND LOWER(?) LIKE LOWER(CONCAT('%', target_value, '%')))
+           OR (target_type = 'Student' AND (LOWER(target_value) = LOWER(?) OR LOWER(target_value) = LOWER(?)))
+         )
+       ORDER BY points ASC`,
+      [studentDomain, studentEmail, studentName]
+    );
+
+    const [claims] = await pool.query('SELECT * FROM student_reward_claims WHERE student_email = ? ORDER BY created_at DESC', [studentEmail]);
+
+    const mappedClaims = claims.map((c) => ({
+      id: c.claim_code,
+      title: c.reward_title,
+      pointsUsed: c.points_used,
+      claimedAt: c.created_at ? new Date(c.created_at).toISOString().split('T')[0] : '2026-07-23',
+      status: c.status,
+      trackingNo: c.tracking_no
+    }));
+
+    const mappedGifts = gifts.map((g) => ({
+      id: g.id,
+      title: g.title,
+      category: g.category,
+      points: g.points,
+      imageIcon: g.image_icon || '🎁',
+      bgGradient: g.bg_gradient || 'from-purple-600 to-indigo-600',
+      description: g.description,
+      inStock: Boolean(g.in_stock),
+      popular: Boolean(g.popular),
+      filePath: g.file_path,
+      resourceUrl: g.resource_url,
+      targetType: g.target_type,
+      targetValue: g.target_value
+    }));
+
+    res.json({
+      points: calculatedPoints,
+      gifts: mappedGifts,
+      claimed: mappedClaims
+    });
+  } catch (error) {
+    console.error('Error fetching student gifts:', error);
+    res.status(500).json({ error: 'Failed to fetch gifts data' });
+  }
+});
+
+// Student: Claim a Reward
+app.post('/api/student/gifts/claim', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    const { giftId, address, phone } = req.body;
+
+    const [rewards] = await pool.query('SELECT * FROM student_rewards WHERE id = ?', [giftId]);
+    if (rewards.length === 0) {
+      return res.status(404).json({ error: 'Reward item not found' });
+    }
+
+    const reward = rewards[0];
+    const [studentInfo] = await pool.query('SELECT email FROM internships WHERE id = ?', [req.user.id]);
+    const studentEmail = studentInfo[0]?.email || req.user.email || 'student@mira.com';
+    const claimCode = `CLM-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    await pool.query(
+      `INSERT INTO student_reward_claims 
+       (claim_code, student_email, reward_id, reward_title, points_used, address, phone, status, tracking_no)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        claimCode,
+        studentEmail,
+        reward.id,
+        reward.title,
+        reward.points,
+        address || '',
+        phone || '',
+        'Processing',
+        'ORD-PENDING'
+      ]
+    );
+
+    res.json({ message: 'Reward claimed successfully', claim_code: claimCode });
+  } catch (error) {
+    console.error('Error claiming gift:', error);
+    res.status(500).json({ error: 'Failed to submit claim request' });
+  }
+});
+
+// Student: Get Resources (PDFs, Application Links, Starter Kits)
+app.get('/api/student/resources', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') return res.status(403).json({ error: 'Access denied' });
+    
+    const studentId = req.user.id;
+    const [studentInfo] = await pool.query('SELECT email, domain, full_name FROM internships WHERE id = ?', [studentId]);
+    const studentEmail = studentInfo[0]?.email || '';
+    const studentDomain = studentInfo[0]?.domain || '';
+    const studentName = studentInfo[0]?.full_name || '';
+
+    const [rows] = await pool.query(
+      `SELECT * FROM student_rewards 
+       WHERE (type IN ('Resource PDF', 'Application Link', 'Goodies Notification') 
+          OR category IN ('Starter Kits', 'Documentation & Guides', 'Design & UI', 'Career & Interview'))
+         AND (
+           target_type = 'All' 
+           OR target_value = 'All'
+           OR (target_type = 'Department' AND LOWER(?) LIKE LOWER(CONCAT('%', target_value, '%')))
+           OR (target_type = 'Student' AND (LOWER(target_value) = LOWER(?) OR LOWER(target_value) = LOWER(?)))
+         )
+       ORDER BY created_at DESC`,
+      [studentDomain, studentEmail, studentName]
+    );
+
+    const formattedResources = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      category: r.category,
+      type: r.type,
+      format: r.file_path ? 'PDF File' : 'Web Link',
+      readTime: 'Direct Resource',
+      description: r.description,
+      url: r.file_path || r.resource_url || '#',
+      author: 'Mira Tech Admin',
+      tags: [r.category, r.type],
+      featured: Boolean(r.popular),
+      downloads: Math.floor(150 + Math.random() * 300)
+    }));
+
+    res.json(formattedResources);
+  } catch (error) {
+    console.error('Error fetching student resources:', error);
+    res.status(500).json({ error: 'Failed to fetch resources' });
+  }
+});
+
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+

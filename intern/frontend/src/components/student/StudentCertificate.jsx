@@ -1,3 +1,5 @@
+import { API_URL } from '../../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Award, Download, CheckCircle, Clock } from 'lucide-react';
@@ -10,7 +12,7 @@ const StudentCertificate = ({ student }) => {
     const fetchCertificate = async () => {
       try {
         const token = localStorage.getItem('studentToken');
-        const res = await axios.get('https://api.mirafuturetechvision.com/api/student/certificate', {
+        const res = await axios.get(`${API_URL}/api/student/certificate`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setCertData(res.data);
@@ -70,7 +72,7 @@ const StudentCertificate = ({ student }) => {
             </p>
           </div>
           <a
-            href={isEligible && certData.pdf_url ? `https://api.mirafuturetechvision.com${certData.pdf_url}` : '#'}
+            href={isEligible && certData.pdf_url ? `${API_URL}${certData.pdf_url}` : '#'}
             target={isEligible && certData.pdf_url ? "_blank" : "_self"}
             rel="noreferrer"
             className={`flex w-full md:w-auto items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${

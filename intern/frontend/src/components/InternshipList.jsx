@@ -1,3 +1,5 @@
+import { API_URL } from '../config';
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import InternshipCard from './InternshipCard';
@@ -11,7 +13,7 @@ const InternshipList = ({ onApply }) => {
   useEffect(() => {
     const fetchDomains = async () => {
       try {
-        const res = await axios.get('https://api.mirafuturetechvision.com/api/domains');
+        const res = await axios.get(`${API_URL}/api/domains`);
         // Parse skills and features if they come as strings
         const parsedData = res.data.map(d => ({
           ...d,
